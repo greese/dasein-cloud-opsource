@@ -34,6 +34,7 @@ import org.dasein.cloud.OperationNotSupportedException;
 
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.LbAlgorithm;
 import org.dasein.cloud.network.LbListener;
 import org.dasein.cloud.network.LbProtocol;
@@ -993,7 +994,12 @@ serverFarm/{server-farm-id}
 		return algorithms;
 	}
 
-	static private volatile List<LbProtocol> protocols = null;
+    @Override
+    public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
+        return Collections.singletonList(IPVersion.IPV4);
+    }
+
+    static private volatile List<LbProtocol> protocols = null;
 
 	@Override
 	public Iterable<LbProtocol> listSupportedProtocols() {

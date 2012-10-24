@@ -32,6 +32,7 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.AddressType;
 
+import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.IpAddress;
 import org.dasein.cloud.network.IpAddressSupport;
 import org.dasein.cloud.network.IpForwardingRule;
@@ -111,7 +112,12 @@ public class IpAddressImplement implements IpAddressSupport {
     	
     	method.parseRequestResult("Assign Ip",method.invoke(), "result", "resultDetail");
     }
-    
+
+    @Override
+    public void assignToNetworkInterface(@Nonnull String addressId, @Nonnull String nicId) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("No support for NICs");
+    }
+
     public String getPrivateIPFromServerId(String serverId) throws InternalException, CloudException{
     	VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
     	if(vm != null){
@@ -172,15 +178,30 @@ public class IpAddressImplement implements IpAddressSupport {
     public boolean isAssigned(AddressType type) {
         return type.equals(AddressType.PUBLIC);
     }
-    
+
+    @Override
+    public boolean isAssigned(@Nonnull IPVersion version) throws CloudException, InternalException {
+        return version.equals(IPVersion.IPV4);
+    }
+
     public boolean isForwarding() {
+        return false;
+    }
+
+    @Override
+    public boolean isForwarding(IPVersion version) throws CloudException, InternalException {
         return false;
     }
 
     public boolean isRequestable(AddressType type) {
     	return type.equals(AddressType.PUBLIC);
     }
-    
+
+    @Override
+    public boolean isRequestable(@Nonnull IPVersion version) throws CloudException, InternalException {
+        return version.equals(IPVersion.IPV4);
+    }
+
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
     	return true;
@@ -281,7 +302,8 @@ config
     
     
 	@Override
-	public Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly) throws InternalException, CloudException {
+    @Deprecated
+	public @Nonnull Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly) throws InternalException, CloudException {
 		  
 		ArrayList<IpAddress> addresses = new ArrayList<IpAddress>();
 	    
@@ -293,9 +315,17 @@ config
         }
         return addresses;
     }
-	
-	
-	public Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly, String networkId) throws InternalException, CloudException {
+
+    @Override
+    public @Nonnull Iterable<IpAddress> listIpPool(@Nonnull IPVersion version, boolean unassignedOnly) throws InternalException, CloudException {
+        if( version.equals(IPVersion.IPV4) ) {
+            return listPublicIpPool(unassignedOnly);
+        }
+        return Collections.emptyList();
+    }
+
+
+    public Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly, String networkId) throws InternalException, CloudException {
 		  
 		ArrayList<IpAddress> addresses = new ArrayList<IpAddress>();
    	
@@ -352,8 +382,13 @@ config
     }
     
     
-	public Collection<IpForwardingRule> listRules(String addressId) throws InternalException, CloudException {
+	public @Nonnull Collection<IpForwardingRule> listRules(String addressId) throws InternalException, CloudException {
     	return  Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
+        return Collections.emptyList();
     }
 
     @Override
@@ -418,7 +453,7 @@ config
 		return list;   	
     }
     
-    public void releaseFromServer(String addressId) throws InternalException, CloudException {
+    public void releaseFromServer(@Nonnull String addressId) throws InternalException, CloudException {
     	NatRule rule = this.getNatRule(addressId, null);
     	
     	if(rule == null){
@@ -449,7 +484,7 @@ config
      * But it supports to create a subnet of ip addresses
      */
     
-    public String request(AddressType addressType) throws InternalException, CloudException {
+    public @Nonnull String request(@Nonnull AddressType addressType) throws InternalException, CloudException {
     	
     	if(addressType.equals(AddressType.PRIVATE)){    		
     		throw new OperationNotSupportedException("OpSource does not support request private IP");        	
@@ -471,11 +506,32 @@ config
         	return subnet.getTags().get("baseIp");
     	}  	
     }
-    
+
+    @Override
+    public @Nonnull String request(@Nonnull IPVersion version) throws InternalException, CloudException {
+        if( version.equals(IPVersion.IPV4) ) {
+            return request(AddressType.PUBLIC);
+        }
+        throw new OperationNotSupportedException("No support for " + version);
+    }
+
+    @Override
+    public @Nonnull String requestForVLAN(IPVersion version) throws InternalException, CloudException {
+        if( version.equals(IPVersion.IPV4) ) {
+            throw new OperationNotSupportedException("This stuff is not yet supported because Dasein Cloud is too stupid to mention what vlan!");
+        }
+        throw new OperationNotSupportedException("No support for " + version);
+    }
+
     public void stopForward(String ruleId) throws InternalException, CloudException {
     	throw new OperationNotSupportedException("Not support for stopForwarding for OpSource");
     }
-    
+
+    @Override
+    public boolean supportsVLANAddresses(@Nonnull IPVersion ofVersion) throws InternalException, CloudException {
+        return false; // TODO: make true when Dasein Cloud changes
+    }
+
     private NatRule toNatRule(Node node, String nameSpace){
     	if(node == null){
     		return null;

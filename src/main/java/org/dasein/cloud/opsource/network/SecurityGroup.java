@@ -29,6 +29,7 @@ import java.util.Locale;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
+import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.Direction;
 import org.dasein.cloud.network.Firewall;
@@ -47,7 +48,6 @@ import org.w3c.dom.NodeList;
 import javax.annotation.Nonnull;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
@@ -78,73 +78,82 @@ public class SecurityGroup implements FirewallSupport {
      * URL: https://<Cloud API URL>/oec/0.9/{org-id}/network/{networkid}/aclrule
 	**/    
     @Override
-    public String authorize(String firewallId, String cidr, Protocol protocol, int startPort, int endPort) throws CloudException, InternalException {
+    @Deprecated
+    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int startPort, int endPort) throws CloudException, InternalException {
+        return authorize(firewallId, Direction.INGRESS, cidr, protocol, startPort, endPort);
+    }
+
+    @Override
+    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
+        if( !Direction.INGRESS.equals(direction) ) {
+            throw new OperationNotSupportedException("No egress rules allowed yet");
+        }
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-    	parameters.put(0, param);
-    	
-    	param = new Param(firewallId, null);
-    	parameters.put(1, param); 
-    	
-      	param = new Param("aclrule", null);
-      	parameters.put(2, param);      	
-      	
+        parameters.put(0, param);
+
+        param = new Param(firewallId, null);
+        parameters.put(1, param);
+
+        param = new Param("aclrule", null);
+        parameters.put(2, param);
+
         /** Create post body */
         Document doc = provider.createDoc();
         Element aclRule = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "AclRule");
         Element nameElmt = doc.createElement("name");
         nameElmt.setTextContent(cidr);
-       
+
         Element positionElmt = doc.createElement("position");
-        
+
         String positionId = getFirstAvaiablePositionForInsertRule(firewallId);
         if(positionId == null){
-        	throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
+            throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
         }else{
-        	positionElmt.setTextContent(positionId);
+            positionElmt.setTextContent(positionId);
         }
-               
-        Element actionElmt = doc.createElement("action");        
+
+        Element actionElmt = doc.createElement("action");
         //<!-- mandatory, string, one of (PERMIT,DENY) -->
         actionElmt.setTextContent("PERMIT");
-    
+
         Element protocolElmt = doc.createElement("protocol");
         protocolElmt.setTextContent(protocol.name());
-        
-      	String ipAddress="0.0.0.0";
-		String mask = null;
-		
-		if(cidr != null){
-			String[] ipInfo = cidr.split("/");
-			ipAddress = ipInfo[0];
-			if(ipInfo.length >1){
-				mask = convertNetMask(ipInfo[1]);
-			}
-		}		
-        
-	    Element sourceIpRange = doc.createElement("sourceIpRange");
-	    Element sourceIpAddress = doc.createElement("ipAddress");		
+
+        String ipAddress="0.0.0.0";
+        String mask = null;
+
+        if(cidr != null){
+            String[] ipInfo = cidr.split("/");
+            ipAddress = ipInfo[0];
+            if(ipInfo.length >1){
+                mask = convertNetMask(ipInfo[1]);
+            }
+        }
+
+        Element sourceIpRange = doc.createElement("sourceIpRange");
+        Element sourceIpAddress = doc.createElement("ipAddress");
         sourceIpAddress.setTextContent(ipAddress);
         sourceIpRange.appendChild(sourceIpAddress);
-        
+
         /** OpSource can not accept cidr style as IP/255.255.255.255, therefore when it is only one IP, ignore */
         if(mask != null && !mask.equals("255.255.255.255") ){
-            Element sourceNetMask = doc.createElement("netmask");		
+            Element sourceNetMask = doc.createElement("netmask");
             sourceNetMask.setTextContent(mask);
-            sourceIpRange.appendChild(sourceNetMask);  
+            sourceIpRange.appendChild(sourceNetMask);
         }
         Element destinationIpRange = doc.createElement("destinationIpRange");
-        Element portRange = doc.createElement("portRange");	
-        Element type = doc.createElement("type");		
-        
+        Element portRange = doc.createElement("portRange");
+        Element type = doc.createElement("type");
+
         /** (ALL,EQUAL_TO,RANGE,GREATER_THAN,LESS_THAN); Set as default EQUAL_TO */
-        type.setTextContent("EQUAL_TO");       
-        
-        Element port = doc.createElement("port1");		
-        port.setTextContent(String.valueOf(startPort));        
+        type.setTextContent("EQUAL_TO");
+
+        Element port = doc.createElement("port1");
+        port.setTextContent(String.valueOf(beginPort));
         portRange.appendChild(type);
-        portRange.appendChild(port);       
-        
+        portRange.appendChild(port);
+
         aclRule.appendChild(nameElmt);
         aclRule.appendChild(positionElmt);
         aclRule.appendChild(actionElmt);
@@ -155,30 +164,30 @@ public class SecurityGroup implements FirewallSupport {
         aclRule.appendChild(portRange);
         doc.appendChild(aclRule);
 
-        OpSourceMethod method = new OpSourceMethod(provider, 
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
-    	Document responseDoc = method.invoke();
-    
-    	Node item = responseDoc.getDocumentElement();
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null,true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
+        Document responseDoc = method.invoke();
+
+        Node item = responseDoc.getDocumentElement();
         String sNS = "";
         try{
             sNS = item.getNodeName().substring(0, item.getNodeName().indexOf(":") + 1);
         }
         catch(IndexOutOfBoundsException ex){}
-    	NodeList matches = item.getChildNodes();
+        NodeList matches = item.getChildNodes();
         if(matches != null){
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
                 if(node.getNodeName().equals(sNS + "id") && node.getFirstChild().getNodeValue() != null ){
-                	return node.getFirstChild().getNodeValue();               	
+                    return node.getFirstChild().getNodeValue();
                 }
-              
+
             }
         }
-        throw new CloudException("Fails to authorizing firewall rule without explaination!");       	
+        throw new CloudException("Fails to authorizing firewall rule without explaination!");
     }
-    
+
     public String convertNetMask(String mask){
     	if(mask == null){
     		return "255.255.255.255";
@@ -337,12 +346,12 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
-    public String getProviderTermForFirewall(Locale locale) {
+    public @Nonnull String getProviderTermForFirewall(@Nonnull Locale locale) {
         return "Network group";
     }
 
     @Override
-    public Collection<FirewallRule> getRules(String firewallId) throws InternalException, CloudException {
+    public @Nonnull Collection<FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
      	/** In OpSource firewallId is the same as networkId */
  
     	ArrayList<FirewallRule> list = new ArrayList<FirewallRule>();
@@ -448,51 +457,61 @@ public class SecurityGroup implements FirewallSupport {
     **/
 
     @Override
-    public void revoke(String firewallId, String cidr, Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
+    public void revoke(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
+        revoke(firewallId, Direction.INGRESS, cidr, protocol, beginPort, endPort);
+    }
+
+    @Override
+    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
         FirewallRule rule = null;
-        String opSourceCidr = this.convertCidr(cidr);     
-        
+        String opSourceCidr = this.convertCidr(cidr);
+
         for( FirewallRule r : getRules(firewallId) ) {
             if(opSourceCidr == null &&  !r.getCidr().equals(opSourceCidr) ) {
-            	continue;
-            }          
+                continue;
+            }
             if( !(r.getStartPort() == beginPort) ) {
-            	continue;
-             }
-             if( !(r.getEndPort() == endPort) ) {
-            	 continue;                         
-             }             
-             if( r.getProtocol() != null &&  !r.getProtocol().equals(protocol) ) {
-            	continue;
-             }
-             
-             rule = r;
-             break; 
-                         
+                continue;
+            }
+            if( !(r.getEndPort() == endPort) ) {
+                continue;
+            }
+            if( r.getProtocol() != null &&  !r.getProtocol().equals(protocol) ) {
+                continue;
+            }
+
+            rule = r;
+            break;
+
         }
         if( rule == null ) {
             logger.warn("No such rule for " + firewallId + ": " + cidr + "/" + protocol + "/" + beginPort + "/" + endPort);
             return;
         }
- 
+
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-    	parameters.put(0, param);
-    	
-    	param = new Param(firewallId, null);
-    	parameters.put(1, param); 
-    	
-      	param = new Param("aclrule", null);
-      	parameters.put(2, param);
-      	
-      	String ruleId = this.getOpSourceRuleIdFromDaseinRuleId(rule.getProviderRuleId());
-      	param = new Param(ruleId, null);
-      	parameters.put(3, param);
-    	    	
-    	OpSourceMethod method = new OpSourceMethod(provider, 
-    			provider.buildUrl("delete",true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-    	method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
+        parameters.put(0, param);
+
+        param = new Param(firewallId, null);
+        parameters.put(1, param);
+
+        param = new Param("aclrule", null);
+        parameters.put(2, param);
+
+        String ruleId = this.getOpSourceRuleIdFromDaseinRuleId(rule.getProviderRuleId());
+        param = new Param(ruleId, null);
+        parameters.put(3, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl("delete",true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+        method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
+    }
+
+    @Override
+    public boolean supportsRules(@Nonnull Direction direction, boolean inVlan) throws CloudException, InternalException {
+        return (Direction.INGRESS.equals(direction) && !inVlan);
     }
 
     private Firewall toFirewall(Node node) {

@@ -25,14 +25,19 @@ import java.util.HashMap;
 import java.util.Locale;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 
+import org.dasein.cloud.Requirement;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.network.IPVersion;
+import org.dasein.cloud.network.NICCreateOptions;
 import org.dasein.cloud.network.NetworkInterface;
+import org.dasein.cloud.network.RoutingTable;
 import org.dasein.cloud.network.Subnet;
 import org.dasein.cloud.network.SubnetState;
 import org.dasein.cloud.network.VLANState;
@@ -60,9 +65,64 @@ public class Network implements VLANSupport {
 
     @Override
     public boolean allowsNewSubnetCreation() throws CloudException, InternalException {
+        return true;
+    }
+
+    @Override
+    public void assignRoutingTableToSubnet(@Nonnull String subnetId, @Nonnull String routingTableId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public void assignRoutingTableToVlan(@Nonnull String vlanId, @Nonnull String routingTableId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public void attachNetworkInterface(@Nonnull String nicId, @Nonnull String vmId, int index) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Network interfaces not supported");
+    }
+
+    @Override
+    public String createInternetGateway(@Nonnull String forVlanId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Internet gateways not supported");
+    }
+
+    @Override
+    public @Nonnull String createRoutingTable(@Nonnull String forVlanId, @Nonnull String name, @Nonnull String description) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public @Nonnull NetworkInterface createNetworkInterface(@Nonnull NICCreateOptions options) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Network interfaces not supported");
+    }
+
+    @Override
+    public void addRouteToAddress(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String address) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public void addRouteToGateway(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String gatewayId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public void addRouteToNetworkInterface(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String nicId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public void addRouteToVirtualMachine(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String vmId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public boolean allowsNewNetworkInterfaceCreation() throws CloudException, InternalException {
         return false;
     }
-    
+
     @Override
     public boolean allowsNewVlanCreation() throws CloudException, InternalException {
     	return true;
@@ -85,6 +145,11 @@ public class Network implements VLANSupport {
       		}
       	}
       	return null;
+    }
+
+    @Override
+    public boolean isNetworkInterfaceSupportEnabled() throws CloudException, InternalException {
+        return false;
     }
 
     @Override
@@ -127,7 +192,27 @@ public class Network implements VLANSupport {
         return list; 
     }
 
-  
+    @Override
+    public void removeInternetGateway(@Nonnull String forVlanId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Internet gateways not supported");
+    }
+
+    @Override
+    public void removeNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Network interfaces not supported");
+    }
+
+    @Override
+    public void removeRoute(@Nonnull String inRoutingTableId, @Nonnull String destinationCidr) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+    @Override
+    public void removeRoutingTable(@Nonnull String routingTableId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Routing tables not supported");
+    }
+
+
     @Override
     public VLAN createVlan(String cidr, String name, String description, String domainName, String[] dnsServers, String[] ntpServers) throws CloudException, InternalException {
         
@@ -187,6 +272,16 @@ public class Network implements VLANSupport {
     }
 
     @Override
+    public void detachNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Network interfaces not supported");
+    }
+
+    @Override
+    public int getMaxNetworkInterfaceCount() throws CloudException, InternalException {
+        return 0;
+    }
+
+    @Override
     public void removeVlan(String vlanId) throws CloudException, InternalException { 
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         
@@ -201,6 +296,16 @@ public class Network implements VLANSupport {
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
     	method.parseRequestResult("Removing Vlan",method.invoke(), "result", "resultDetail");
         
+    }
+
+    @Override
+    public boolean supportsInternetGatewayCreation() throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
+    public boolean supportsRawAddressRouting() throws CloudException, InternalException {
+        return false;
     }
 
     public VLAN toVLAN(Node node) {
@@ -220,6 +325,7 @@ public class Network implements VLANSupport {
         network.setProviderOwnerId(provider.getContext().getAccountNumber());
         network.setCurrentState(VLANState.AVAILABLE);
         network.setProviderRegionId(provider.getContext().getRegionId());
+        String gateway = null;
 
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
@@ -249,9 +355,9 @@ public class Network implements VLANSupport {
                 	return null;                	
                 }
             }
-            else if( name.equalsIgnoreCase(sNS + "privateNet") && value != null ) {
-            	network.setGateway(value);            	
-            }
+            //else if( name.equalsIgnoreCase(sNS + "privateNet") && value != null ) {
+            //	network.setGateway(value);
+            //}
             else if( name.equalsIgnoreCase(sNS + "multicast") && value != null ) {
             	//           	
             }
@@ -274,13 +380,13 @@ public class Network implements VLANSupport {
            		}              	
             }
             else if( name.equalsIgnoreCase(sNS + "publicSnat") && value != null ) {
-            	//network.setGateway(value);            	
+            	gateway = value;
             }
             else if( name.equalsIgnoreCase(sNS + "privateSnat") && value != null ) {
-            	//network.setGateway(value);            	
+            	gateway = value;
             }
             else if( name.equalsIgnoreCase(sNS + "privateNet") && value != null ) {
-            	network.setGateway(value);            	
+                gateway = value;
             }
             else if( name.equalsIgnoreCase(sNS + "publicIps") && value != null ) {
          		NodeList publicIpAttributes  = attribute.getChildNodes();
@@ -311,11 +417,11 @@ public class Network implements VLANSupport {
         if( network.getDescription() == null ) {
             network.setDescription(network.getName());
         }
-        if( network.getGateway() != null ) {
+        if( gateway != null ) {
             if( netmask == null ) {
                 netmask = "255.255.255.0";
             }
-            network.setCidr(toCidr(network.getGateway(), netmask));
+            network.setCidr(toCidr(gateway, netmask));
         }
         return network;
     }
@@ -578,11 +684,6 @@ public class Network implements VLANSupport {
     }
 
     @Override
-    public Iterable<NetworkInterface> listNetworkInterfaces(String arg0) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
     public Subnet createSubnet(String cidr, String inProviderVlanId, String name, String description) throws CloudException, InternalException {
        return createSubnet(inProviderVlanId);
     }
@@ -611,18 +712,38 @@ public class Network implements VLANSupport {
     }
 
     @Override
-    public String getProviderTermForNetworkInterface(Locale locale) {
+    public @Nonnull String getProviderTermForNetworkInterface(@Nonnull Locale locale) {
         return "NIC";
     }
 
     @Override
-    public String getProviderTermForSubnet(Locale locale) {
+    public @Nonnull String getProviderTermForSubnet(@Nonnull Locale locale) {
+        return "subnet";
+    }
+
+    @Override
+    public @Nonnull String getProviderTermForVlan(@Nonnull Locale locale) {
         return "network";
     }
 
     @Override
-    public String getProviderTermForVlan(Locale locale) {
-        return "network";
+    public NetworkInterface getNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
+        return null;
+    }
+
+    @Override
+    public RoutingTable getRoutingTableForSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
+        return null;
+    }
+
+    @Override
+    public @Nonnull Requirement getRoutingTableSupport() throws CloudException, InternalException {
+        return Requirement.NONE;
+    }
+
+    @Override
+    public RoutingTable getRoutingTableForVlan(@Nonnull String vlanId) throws CloudException, InternalException {
+        return null;
     }
 
     @Override
@@ -643,7 +764,12 @@ public class Network implements VLANSupport {
         }    	
         return null;    	
     }
-    
+
+    @Override
+    public @Nonnull Requirement getSubnetSupport() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
+    }
+
     public Subnet getSubnetResponseInfo( @Nonnull String continaBaseIpInfo) throws CloudException, InternalException {
         ArrayList<VLAN> vlanList = (ArrayList<VLAN>) listVlans();
         if(vlanList == null){
@@ -670,12 +796,42 @@ public class Network implements VLANSupport {
     }
 
     @Override
+    public @Nonnull Collection<String> listFirewallIdsForNIC(@Nonnull String nicId) throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<NetworkInterface> listNetworkInterfaces() throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesForVM(@Nonnull String forVmId) throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesInSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesInVLAN(@Nonnull String vlanId) throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<RoutingTable> listRoutingTables(@Nonnull String inVlanId) throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
     public boolean isSubnetDataCenterConstrained() throws CloudException, InternalException {
         return true;
     }
     
     @Override
-    public Iterable<Subnet> listSubnets(String inVlanId) throws CloudException, InternalException {
+    public @Nonnull Iterable<Subnet> listSubnets(@Nonnull String inVlanId) throws CloudException, InternalException {
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param("networkWithLocation", null);
     	parameters.put(0, param);
@@ -710,6 +866,11 @@ public class Network implements VLANSupport {
             }
         }
         return list;      
+    }
+
+    @Override
+    public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
+        return Collections.singletonList(IPVersion.IPV4);
     }
 
     @Override
@@ -748,11 +909,6 @@ public class Network implements VLANSupport {
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
     	
     	method.parseRequestResult("Removing subnet",method.invoke(), "result", "resultDetail");
-    }
-
-    @Override
-    public boolean supportsVlansWithSubnets() throws CloudException, InternalException {
-        return false;
     }
     
     private String toCidr(String gateway, String netmask) {

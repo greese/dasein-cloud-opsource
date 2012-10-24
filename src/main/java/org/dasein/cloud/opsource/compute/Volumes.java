@@ -27,18 +27,25 @@ import java.util.List;
 import java.util.Locale;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 
+import org.dasein.cloud.OperationNotSupportedException;
+import org.dasein.cloud.Requirement;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.Volume;
 
+import org.dasein.cloud.compute.VolumeCreateOptions;
+import org.dasein.cloud.compute.VolumeProduct;
 import org.dasein.cloud.compute.VolumeSupport;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.util.uom.storage.Gigabyte;
+import org.dasein.util.uom.storage.Storage;
 
 
 public class Volumes implements VolumeSupport {
@@ -51,7 +58,7 @@ public class Volumes implements VolumeSupport {
     }
     
     @Override
-    public void attach(String volumeId, String serverId, String deviceId) throws InternalException, CloudException {
+    public void attach(@Nonnull String volumeId, @Nonnull String serverId, @Nonnull String deviceId) throws InternalException, CloudException {
     	//No need for volumeId and deviceId
     	attach(serverId, 10);    	
     }
@@ -73,13 +80,17 @@ public class Volumes implements VolumeSupport {
 
 
     @Override
-    public String create(String snapshotId, int size, String zoneId) throws InternalException, CloudException {
-    	// NO OP
-    	return new String();
+    public @Nonnull String create(@Nonnull String snapshotId, int size, @Nonnull String zoneId) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("Creating volumes is not supported");
     }
 
     @Override
-    public void detach(String volumeId) throws InternalException, CloudException {
+    public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("Creating volumes is not supported");
+    }
+
+    @Override
+    public void detach(@Nonnull String volumeId) throws InternalException, CloudException {
     	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.SERVER_BASE_PATH, null);
      	parameters.put(0, param);
@@ -93,24 +104,46 @@ public class Volumes implements VolumeSupport {
      			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
        	method.requestResult("Attaching disk",method.invoke());
     }
-    
-  
-  
-    
+
     @Override
-    public String getProviderTermForVolume(Locale locale) {
+    public int getMaximumVolumeCount() throws InternalException, CloudException {
+        return 0;
+    }
+
+    @Override
+    public Storage<Gigabyte> getMaximumVolumeSize() throws InternalException, CloudException {
+        return null;
+    }
+
+    @Override
+    public @Nonnull Storage<Gigabyte> getMinimumVolumeSize() throws InternalException, CloudException {
+        return new Storage<Gigabyte>(1, Storage.GIGABYTE);
+    }
+
+
+    @Override
+    public @Nonnull String getProviderTermForVolume(@Nonnull Locale locale) {
         return "disk";
     }
 
   
     
     @Override
-    public Volume getVolume(String volumeId) throws InternalException, CloudException {
+    public @Nullable Volume getVolume(@Nonnull String volumeId) throws InternalException, CloudException {
        return null;
     }
 
- 
-    
+    @Override
+    public @Nonnull Requirement getVolumeProductRequirement() throws InternalException, CloudException {
+        return Requirement.NONE;
+    }
+
+    @Override
+    public boolean isVolumeSizeDeterminedByProduct() throws InternalException, CloudException {
+        return false;
+    }
+
+
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         return false;
@@ -120,7 +153,7 @@ public class Volumes implements VolumeSupport {
     private List<String> windowsDeviceIdList = null;
     
     @Override
-    public Iterable<String> listPossibleDeviceIds(Platform platform) throws InternalException, CloudException {
+    public @Nonnull Iterable<String> listPossibleDeviceIds(@Nonnull Platform platform) throws InternalException, CloudException {
         if( platform.isWindows() ) {
             if( windowsDeviceIdList == null ) {
                 ArrayList<String> list = new ArrayList<String>();
@@ -151,17 +184,19 @@ public class Volumes implements VolumeSupport {
             return unixDeviceIdList;
         }
     }
-    
+
     @Override
-    public Iterable<Volume> listVolumes() throws InternalException, CloudException {
-        return listVolumes(false);
+    public @Nonnull Iterable<VolumeProduct> listVolumeProducts() throws InternalException, CloudException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<Volume> listVolumes() throws InternalException, CloudException {
+        return Collections.emptyList();
     }
      
     private Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
-      
-        ArrayList<Volume> volumes = new ArrayList<Volume>();
-      
-        return volumes;
+        return Collections.emptyList();
     }
 
  
@@ -171,8 +206,8 @@ public class Volumes implements VolumeSupport {
     }
 
     @Override
-    public void remove(String volumeId) throws InternalException, CloudException {
-
+    public void remove(@Nonnull String volumeId) throws InternalException, CloudException {
+        // NO-OP
     }  
   
 }

@@ -28,23 +28,25 @@ import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import javax.annotation.Nonnull;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpException;
-import org.apache.commons.httpclient.HttpStatus;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpEntityEnclosingRequest;
+import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.HttpVersion;
 import org.apache.http.ParseException;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpHead;
@@ -54,16 +56,21 @@ import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpTrace;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.params.AuthPolicy;
+import org.apache.http.conn.params.ConnRoutePNames;
 import org.apache.http.entity.AbstractHttpEntity;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.AbstractHttpMessage;
 import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpParams;
+import org.apache.http.params.HttpProtocolParams;
+import org.apache.http.protocol.HTTP;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 
+import org.dasein.cloud.ProviderContext;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -109,21 +116,31 @@ public class OpSourceMethod {
         }
     	return method;
     }
-	
-    protected HttpClient getClient() {
-        String proxyHost = provider.getContext().getCustomProperties().getProperty("proxyHost");
-        String proxyPort = provider.getContext().getCustomProperties().getProperty("proxyPort");
-        HttpClient client = new HttpClient();
-        
-        if( proxyHost != null ) {
-            int port = 0;
-            
-            if( proxyPort != null && proxyPort.length() > 0 ) {
-                port = Integer.parseInt(proxyPort);
+
+    private @Nonnull HttpClient getClient(@Nonnull ProviderContext ctx, boolean ssl) {
+        HttpParams params = new BasicHttpParams();
+
+        HttpProtocolParams.setVersion(params, HttpVersion.HTTP_1_1);
+        //noinspection deprecation
+        HttpProtocolParams.setContentCharset(params, HTTP.UTF_8);
+        HttpProtocolParams.setUserAgent(params, "Dasein Cloud");
+
+        Properties p = ctx.getCustomProperties();
+
+        if( p != null ) {
+            String proxyHost = p.getProperty("proxyHost");
+            String proxyPort = p.getProperty("proxyPort");
+
+            if( proxyHost != null ) {
+                int port = 0;
+
+                if( proxyPort != null && proxyPort.length() > 0 ) {
+                    port = Integer.parseInt(proxyPort);
+                }
+                params.setParameter(ConnRoutePNames.DEFAULT_PROXY, new HttpHost(proxyHost, port, ssl ? "https" : "http"));
             }
-            client.getHostConfiguration().setProxy(proxyHost, port);
         }
-        return client;
+        return new DefaultHttpClient(params);
     }
     
 	public Document invoke() throws CloudException, InternalException {
@@ -193,25 +210,9 @@ public class OpSourceMethod {
                         wire.debug(header.getName() + ": " + header.getValue());
                     }
                 }
-        		try {        			
-        		     /**  Now execute the request */
-                    httpResponse = httpclient.execute((HttpUriRequest) method);
-                    status = httpResponse.getStatusLine().getStatusCode();                  
-        		} 
-        		catch( HttpException e ) {
-        		    logger.error("invoke(): HTTP error executing query: " + e.getMessage());
-        		    if( logger.isDebugEnabled() ) {
-        		        e.printStackTrace();
-        		    }
-        			throw new CloudException(e);
-        		} 
-        		catch( IOException e ) {
-                    logger.error("invoke(): I/O error executing query: " + e.getMessage());
-                    if( logger.isDebugEnabled() ) {
-                        e.printStackTrace();
-                    }
-        			throw new InternalException(e);
-        		}
+                /**  Now execute the request */
+                httpResponse = httpclient.execute((HttpUriRequest) method);
+                status = httpResponse.getStatusLine().getStatusCode();
                 if( wire.isDebugEnabled() ) {
                     wire.debug("invoke(): HTTP Status " + httpResponse.getStatusLine().getStatusCode() + " " +  httpResponse.getStatusLine().getReasonPhrase());
                 }                

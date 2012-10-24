@@ -1,4 +1,9 @@
 dasein-cloud-opsource
 =====================
 
-Dasein Cloud implementation for the OpSource Cloud (now Dimension Data). For more information on Dasein Cloud, see the Dasein Cloud home page at https://github.com/greese/dasein-cloud.
+The Dasein Cloud OpSource (Dimension Data) submodule to the [Dasein Cloud](https://github.com/greese/dasein-cloud) project provides
+an implementation of the Dasein Cloud API for the [OpSource Cloud](http://www.opsource.net/Services/Public-Cloud).
+
+* [Get started with Dasein Cloud](https://github.com/dasein-cloud)
+* [Get started with Dasein Cloud + OpSource](https://github.com/greese/dasein-cloud-opsource/wiki)
+
