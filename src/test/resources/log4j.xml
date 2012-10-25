@@ -48,17 +48,17 @@
         <priority value="DEBUG" />
         <appender-ref ref="ASYNCDASEIN" />
     </category>
-    
+
     <category name="org.dasein.cloud.test">
         <priority value="DEBUG" />
         <appender-ref ref="ASYNCUNIT" />
     </category>
-    
+
     <category name="dasein.cloud.opsource.std">
         <priority value="TRACE" />
-        <appender-ref ref="ASYNCUNIT" />
+        <appender-ref ref="ASYNCDASEIN" />
     </category>
-    
+
     <category name="dasein.cloud.opsource.wire">
         <priority value="DEBUG" />
         <appender-ref ref="ASYNCWIRE" />

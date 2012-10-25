@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2012 enStratus Networks Inc
+ * Copyright (C) 2011-2012 enStratus Networks Inc
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,9 @@ import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.util.CalendarWrapper;
 import org.dasein.util.uom.storage.Gigabyte;
+import org.dasein.util.uom.storage.Megabyte;
 import org.dasein.util.uom.storage.Storage;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -61,17 +63,17 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class VirtualMachines implements VirtualMachineSupport {
-	static public final Logger logger = Logger.getLogger(VirtualMachines.class);
+	static public final Logger logger = OpSource.getLogger(VirtualMachines.class);
+
 	static private final String DESTROY_VIRTUAL_MACHINE = "delete";
 	static private final String CLEAN_VIRTUAL_MACHINE = "clean";
 	static private final String REBOOT_VIRTUAL_MACHINE  = "reboot";
 	static private final String START_VIRTUAL_MACHINE   = "start";
 	static private final String PAUSE_VIRTUAL_MACHINE 	= "shutdown";
 	/** Node tag name */
-	static private final String Deployed_Server_Tag = "Server";
+	//static private final String Deployed_Server_Tag = "Server";
 	static private final String Pending_Deployed_Server_Tag = "PendingDeployServer";
 
-	int attemptForOperation = 30;
 	long waitTimeToAttempt = 30000L;
 
 	private OpSource provider;
@@ -149,22 +151,22 @@ public class VirtualMachines implements VirtualMachineSupport {
 
 
 	@Override
-	public VirtualMachine clone(String serverId, String intoDcId, String name, String description, boolean powerOn, String ... firewallIds) throws InternalException, CloudException {
+	public @Nonnull VirtualMachine clone(@Nonnull String serverId, @Nonnull String intoDcId, @Nonnull String name, @Nonnull String description, boolean powerOn, String ... firewallIds) throws InternalException, CloudException {
 		throw new OperationNotSupportedException("Instances cannot be cloned.");
 	}
 
 	@Override
 	public void disableAnalytics(String vmId) throws InternalException, CloudException {
-		throw new OperationNotSupportedException("NO OP");
+        // NO-OP
 	}
 
 	@Override
 	public void enableAnalytics(String vmId) throws InternalException, CloudException {
-		throw new OperationNotSupportedException("NO OP");
+        // NO-OP
 	}
 
 	@Override
-	public String getConsoleOutput(String serverId) throws InternalException, CloudException {
+	public @Nonnull String getConsoleOutput(@Nonnull String serverId) throws InternalException, CloudException {
 		return "";
 	}
 
@@ -174,7 +176,7 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
-	public VirtualMachineProduct getProduct(String productId) throws InternalException, CloudException {
+	public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
 		for( Architecture architecture : Architecture.values() ) {
 			for( VirtualMachineProduct product : listProducts(architecture) ) {
 				if( product.getProviderProductId().equals(productId) ) {
@@ -247,7 +249,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 	}
 
 	@Override
-	public Iterable<VmStatistics> getVMStatisticsForPeriod(String arg0, long arg1, long arg2) throws InternalException, CloudException {
+	public @Nonnull Iterable<VmStatistics> getVMStatisticsForPeriod(@Nonnull String arg0, long arg1, long arg2) throws InternalException, CloudException {
 		return Collections.emptyList();
 	}
 
@@ -297,226 +299,254 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
-    public @Nonnull VirtualMachine launch(VMLaunchOptions withLaunchOptions) throws CloudException, InternalException {
-        String imageId = withLaunchOptions.getMachineImageId();
-        VirtualMachineProduct product = getProduct(withLaunchOptions.getStandardProductId());
-        String inZoneId = withLaunchOptions.getDataCenterId();
-        String name = withLaunchOptions.getHostName();
-        String description = withLaunchOptions.getDescription();
-        String withVlanId = withLaunchOptions.getVlanId();
+    public @Nonnull VirtualMachine launch(final VMLaunchOptions withLaunchOptions) throws CloudException, InternalException {
+        if( logger.isTraceEnabled() ) {
+            logger.trace("ENTER - " + VirtualMachines.class.getName() + ".launch(" + withLaunchOptions + ")");
+        }
+        try {
+            VirtualMachineProduct product = getProduct(withLaunchOptions.getStandardProductId());
+            String imageId = withLaunchOptions.getMachineImageId();
+            String inZoneId = withLaunchOptions.getDataCenterId();
+            final String name = withLaunchOptions.getHostName();
+            String description = withLaunchOptions.getDescription();
+            String withVlanId = withLaunchOptions.getVlanId();
 
-        try{
             /** First step get the target image */
-            if( logger.isTraceEnabled() ) {
-                logger.trace("ENTER: " + VirtualMachine.class.getName() + ".launch()");
-                logger.trace("First step get the target image");
+            if( logger.isInfoEnabled() ) {
+                logger.info("Fetching deployment information from the target image: " + imageId);
             }
-            ServerImage imageSupport = new ServerImage(provider);
+            ServerImage imageSupport = provider.getComputeServices().getImageSupport();
             MachineImage origImage = imageSupport.getOpSourceImage(imageId);
-            if(origImage == null){
-                logger.error("No such image to launch VM");
-                throw new CloudException("No such image to launch VM");
+
+            if( origImage == null ) {
+                logger.error("No such image to launch VM: " + imageId);
+                throw new CloudException("No such image to launch VM: " + imageId);
             }
 
-            int targetCPU = product.getCpuCount();
-            int targetMemory = product.getRamSize().intValue();
-            int targetDisk = product.getRootVolumeSize().intValue();
+            final int targetCPU = product.getCpuCount();
+            final int targetMemory = product.getRamSize().intValue();
+            final int targetDisk = product.getRootVolumeSize().intValue();
 
-            int currentCPU = 0;
-            int currentMemory =0;
-            int currentDisk = 10;
+            final int currentCPU = (origImage.getTag("cpuCount") == null) ? 0 : Integer.valueOf((String)origImage.getTag("cpuCount"));
+            final int currentMemory = (origImage.getTag("memory") == null) ? 0 : Integer.valueOf((String)origImage.getTag("memory"));
+            final int currentDisk = 10;
 
-            if(origImage.getTag("cpuCount") != null){
-                currentCPU = Integer.valueOf((String) origImage.getTag("cpuCount"));
+            if( logger.isDebugEnabled() ) {
+                logger.debug("Launch request for " + targetCPU + "/" + targetMemory + "/" + targetDisk + " against " + currentCPU + "/" + currentMemory);
             }
-
-            if(origImage.getTag("memory") != null){
-                currentMemory = Integer.valueOf((String) origImage.getTag("memory"));
-            }
-
             if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
-                boolean isDeployed = this.deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, null, "true");
-                if(isDeployed){
+                if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, null, "true") ) {
                     return getVirtualMachineByName(name);
-                }else{
+                }
+                else {
                     throw new CloudException("Fail to launch the server");
                 }
 
-            }else if(targetDisk == 0 && ((targetCPU == 1 && targetMemory == 2048) || (targetCPU == 2 && targetMemory == 4096) || (targetCPU == 4 && targetMemory == 6144))){
+            }
+            else if( targetDisk == 0 && ((targetCPU == 1 && targetMemory == 2048) || (targetCPU == 2 && targetMemory == 4096) || (targetCPU == 4 && targetMemory == 6144))){
                 /**  If it is Opsource OS, then get the target image with the same cpu and memory */
-                MachineImage targetTmage = imageSupport.searchImage(origImage.getPlatform(), origImage.getArchitecture(), product.getCpuCount(), product.getRamSize().intValue());
-                if(targetTmage != null){
-                    boolean isDeployed = this.deploy(targetTmage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, null, "true");
+                MachineImage targetImage = imageSupport.searchImage(origImage.getPlatform(), origImage.getArchitecture(), product.getCpuCount(), product.getRamSize().intValue());
 
-                    if(isDeployed){
+                if(targetImage != null) {
+                    if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, null, "true") ){
                         return getVirtualMachineByName(name);
-                    }else{
+                    }
+                    else {
                         throw new CloudException("Fail to launch the server");
                     }
                 }
             }
+            logger.info("Need to modify server after deployment, pursuing a multi-step deployment operation");
             /** There is target image with the CPU and memory required, then need to modify the server after deploying */
 
             /** Second step deploy VM */
 
-            if( logger.isTraceEnabled() ) {
-                logger.trace("Second step deploy VM");
+            if( !deploy(imageId, inZoneId, name, description, withVlanId, null, "false") ) {
+                throw new CloudException("Fail to deploy VM without further information");
             }
 
-            boolean isDeployed = this.deploy(imageId, inZoneId, name, description, withVlanId, null, "false");
-
-            long starttime = System.currentTimeMillis();
-
-            /** Third Step Modify VM */
-            if(!isDeployed){
-                throw new CloudException("Fail to deploy VM");
-            }
-
-            VirtualMachine server = getVirtualMachineByName(name);
+            final VirtualMachine server = getVirtualMachineByName(name);
 
             /** update the hardware (CPU, memory configuration)*/
             if(server == null){
-                throw new CloudException("Server failed to deployed without explaination");
+                throw new CloudException("Server failed to deploy without explaination");
             }
-
-            if(currentCPU != targetCPU || currentMemory != targetMemory ){
-
-                int localAttemptToUpdateVM = attemptForOperation;
-
-                /** Modify server to target cpu and memory */
-                while (localAttemptToUpdateVM >0){
+            Thread t = new Thread() {
+                public void run() {
+                    provider.hold();
                     try {
-                        /** VM has finished deployment before continuing, therefore wait 15s */
-                        server = getVirtualMachineByName(name);
-                        if(server == null){
-                            throw new CloudException("Server failed to launch during modifying the CPU and Memory !!!");
+                        try {
+                            configure(server, name, currentCPU, currentMemory, currentDisk, targetCPU, targetMemory, targetDisk);
                         }
-
-                        currentCPU = Integer.valueOf((String) server.getTag("cpuCount"));
-                        currentMemory = Integer.valueOf((String) server.getTag("memory"));
-
-                        if(currentCPU != targetCPU || currentMemory != targetMemory ){
-                            logger.info("Begin to modify ->" + localAttemptToUpdateVM );
-                            boolean isModify = modify(server.getProviderVirtualMachineId(), targetCPU, targetMemory);
-
-                            if(isModify){
-                                localAttemptToUpdateVM = 0;
-                            }
-                        }else{
-                            localAttemptToUpdateVM = 0;
-                        }
-
-                    } catch (InternalException e) {
-                        /** Throwable? */
-                    } catch (CloudException e) {
-                        try{
-                            Thread.sleep(waitTimeToAttempt); //Wait 30000L
-                            localAttemptToUpdateVM--;
-                        }catch(InterruptedException e1){
-                            logger.info("InterruptedException while trying to wait 30s to update the server with Id ");
+                        catch( Throwable t ) {
+                            logger.error("Failed to complete configuration of " + server.getProviderVirtualMachineId() + " in OpSource: " + t.getMessage());
+                            t.printStackTrace();
                         }
                     }
+                    finally {
+                        provider.release();
+                    }
                 }
-                if(logger.isTraceEnabled()){
-                    long end = System.currentTimeMillis();
-                    logger.trace("Total deploy time -> " + ((end-starttime)/1000));
+            };
+            t.setName("Configure OpSource VM " + server.getProviderVirtualMachineId());
+            t.setDaemon(true);
+            t.start();
+
+            return server;
+        }
+        finally{
+            if( logger.isTraceEnabled() ) {
+                logger.trace("EXIT: " + VirtualMachine.class.getName() + ".launch()");
+            }
+        }
+    }
+
+    private void configure(VirtualMachine server, String name, int currentCPU, int currentMemory, int currentDisk, int targetCPU, int targetMemory, int targetDisk) {
+        if( logger.isTraceEnabled() ) {
+            logger.trace("ENTER - " + VirtualMachines.class.getName() + ".configure(" + server + "," + name + "," + currentCPU + "," + currentMemory + "," + currentDisk + "," + targetCPU + "," + targetMemory + "," + targetDisk + ")");
+        }
+        try {
+            if( logger.isInfoEnabled() ) {
+                logger.info("Configuring " + server.getName() + " [#" + server.getProviderVirtualMachineId() + "] - " + server.getCurrentState());
+            }
+            if( currentCPU != targetCPU || currentMemory != targetMemory ) {
+                if( logger.isInfoEnabled() ) {
+                    logger.info("Need to reconfigure CPU and/or memory");
+                }
+                /** Modify server to target cpu and memory */
+
+                /** VM has finished deployment before continuing, therefore wait 15s */
+                try {
+                    server = getVirtualMachineByName(name);
+                }
+                catch( Exception e ) {
+                    logger.warn("Unable to load server for configuration: " + e.getMessage());
+                }
+                if( server == null ) {
+                    logger.error("Server disappeared while waiting for deployment to complete");
+                    return;
+                }
+                currentCPU = Integer.valueOf((String) server.getTag("cpuCount"));
+                currentMemory = Integer.valueOf((String) server.getTag("memory"));
+
+                if( currentCPU != targetCPU || currentMemory != targetMemory ) {
+                    long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 20L);
+
+                    Exception currentException = null;
+
+                    logger.info("Beginning modification process...");
+                    while( timeout > System.currentTimeMillis() ) {
+                        try {
+                            if( modify(server.getProviderVirtualMachineId(), targetCPU, targetMemory) ) {
+                                currentException = null;
+                                break;
+                            }
+                            else {
+                                currentException = new CloudException("Modification failed without explanation");
+                            }
+                        }
+                        catch( Exception e ) {
+                            logger.warn("Modification failed: " + e.getMessage());
+                            currentException = e;
+                        }
+                        try { Thread.sleep(30000L); }
+                        catch( InterruptedException ignore ) { }
+                    }
+                    if( currentException == null ) {
+                        logger.info("Modification succeeded");
+                    }
+                    else {
+                        logger.error("Server could not be modified: " + currentException.getMessage());
+                        currentException.printStackTrace();
+                    }
                 }
             }
-
             /** Third Step: attach the disk */
-
-            if( targetDisk != currentDisk){
+            if( targetDisk != currentDisk) {
+                if( logger.isInfoEnabled() ) {
+                    logger.info("Need to reconfigure for disk: " + currentDisk + " vs " + targetDisk);
+                }
+                long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 20L);
+                Exception currentException = null;
 
                 /** Update usually take another 6 mins */
-                starttime = System.currentTimeMillis();
-                int localAttemptToAttachDisk = attemptForOperation;
-
-                while (localAttemptToAttachDisk >0){
+                while( System.currentTimeMillis() < timeout ) {
                     try {
-                        //Begin to attach the VM
-                        if(logger.isTraceEnabled()){
-                            logger.trace("Begin to attach the server " + localAttemptToAttachDisk);
-                        }
                         server = getVirtualMachineByName(name);
-                        if(server == null){
-                            throw new CloudException("Server failed to launch while attaching disk !!!");
+                        if( server == null ) {
+                            logger.error("Lost access to server while attempting to attach disk");
+                            return;
                         }
-                        if(server.getProductId() != null ) {
+                    }
+                    catch( Exception e ) {
+                        logger.warn("Unable to load the server's current state, praying the old one works: " + e.getMessage());
+                    }
+
+                    if( server.getProductId() != null ) {
+                        try {
                             VirtualMachineProduct prd = getProduct(server.getProductId());
 
                             if( prd != null && prd.getRootVolumeSize().intValue() == targetDisk ) {
-                                localAttemptToAttachDisk = 0;
+                                if( logger.isInfoEnabled() ) {
+                                    logger.info("Target match, aborting attachment for " + server.getProviderVirtualMachineId());
+                                }
+                                break;
+                            }
+                            if( attachDisk(server.getProviderVirtualMachineId(), targetDisk) ){
+                                if( logger.isInfoEnabled() ) {
+                                    logger.info("Attach succeeded for " + server.getProviderVirtualMachineId());
+                                }
+                                break;
                             }
                         }
-
-                        boolean isAttached = attachDisk(server.getProviderVirtualMachineId(), targetDisk);
-
-                        if(isAttached){
-                            localAttemptToAttachDisk = 0;
-                        }
-
-                        if(logger.isTraceEnabled()){
-                            long end = System.currentTimeMillis();
-                            logger.info("Total attach time -> " + ((end-starttime)/1000));
-                        }
-
-                    } catch (InternalException e) {
-                        /** throwable */
-                    } catch (CloudException e) {
-                        try{
-                            Thread.sleep(waitTimeToAttempt);
-                            localAttemptToAttachDisk--;
-
-                        }catch (InterruptedException e1) {
-                            logger.info("InterruptedException while trying to wait 30s to attaching disk to the server ");
+                        catch( Exception e ) {
+                            logger.warn("Error during attach: " + e.getMessage());
+                            currentException = e;
                         }
                     }
+                    try { Thread.sleep(30000L); }
+                    catch( InterruptedException ignore ) { }
+                }
+                if( currentException != null ) {
+                    logger.error("Unable to attach disk: " + currentException.getMessage());
+                    currentException.printStackTrace();
                 }
             }
-
             /**  Fourth Step: boot the server */
             /** Update usually take another 10 mins, wait 5 minutes first */
-            starttime = System.currentTimeMillis();
-            int localAttemptToBootVM = attemptForOperation;
+            long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 15L);
 
-            while (localAttemptToBootVM >0){
+            if( logger.isInfoEnabled() ) {
+                logger.info("Booting " + server.getProviderVirtualMachineId());
+            }
+            while( System.currentTimeMillis() < timeout ) {
                 try {
                     /** Begin to start the VM */
                     server = getVirtualMachineByName(name);
-                    if(server == null){
-                        throw new CloudException("Server failed to launch while booting !!!");
+                    if( server == null ) {
+                        logger.error("Server disappeared while performing bootup");
+                        return;
                     }
-
-                    if(server.getCurrentState().equals(VmState.RUNNING)){
-                        /** Already started	*/
-                        return server;
+                    if( server.getCurrentState().equals(VmState.RUNNING)) {
+                        if( logger.isInfoEnabled() ) {
+                            logger.info(server.getProviderVirtualMachineId() + " is now RUNNING");
+                        }
+                        return;
                     }
-                    /** Start VM*/
-                    start(server.getProviderVirtualMachineId());
-
-                    if(logger.isTraceEnabled()){
-                        long end = System.currentTimeMillis();
-                        logger.info("Total boot time -> " + ((end-starttime)/1000));
-                    }
-                    return server;
-                } catch (InternalException e) {
-
-                } catch (CloudException e) {
-                    try{
-
-                        Thread.sleep(waitTimeToAttempt);
-
-                        localAttemptToBootVM--;
-
-                    }catch (InterruptedException e1) {
-                        logger.warn("InterruptedException while trying to wait 30s to update the server with Id ");
+                    else if( server.getCurrentState().equals(VmState.STOPPED) ) {
+                        start(server.getProviderVirtualMachineId());
                     }
                 }
+                catch( Exception e ) {
+                    logger.warn("Error during boot process, maybe retry?: " + e.getMessage());
+                }
+                try { Thread.sleep(15000L); }
+                catch( InterruptedException ignore ) { }
             }
-            return null;
-        }finally{
+        }
+        finally {
             if( logger.isTraceEnabled() ) {
-                logger.trace("EXIT: " + VirtualMachine.class.getName() + ".launch()");
+                logger.trace("EXIT - " + VirtualMachines.class.getName() + ".configure()");
             }
         }
     }
@@ -548,17 +578,6 @@ public class VirtualMachines implements VirtualMachineSupport {
         }
         return launch(options);
 	}
-
-	/**
-	 *
-	 * @param imageId
-	 * @param inZoneId
-	 * @param name
-	 * @param description
-	 * @param withVlanId
-	 * @param adminPassword
-	 * @param isStart: true or false
-	 */
 
 	private boolean deploy(@Nonnull String imageId, String inZoneId, String name, String description, String withVlanId, String adminPassword, String isStart) throws InternalException, CloudException {
 		inZoneId = translateZone(inZoneId);
@@ -619,7 +638,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 
 
 	@Override
-	public Iterable<String> listFirewalls(String vmId) throws InternalException, CloudException {
+	public @Nonnull Iterable<String> listFirewalls(@Nonnull String vmId) throws InternalException, CloudException {
 		/** Firewall Id is the same as the network ID*/
 		VirtualMachine vm = this.getVirtualMachine(vmId);
 
@@ -692,7 +711,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 					product.setProviderProductId(cpuNum + ":" + ramInGB + ":" + disk);
 					product.setName(" (" + cpuNum + " CPU/" + ramInGB + " Gb RAM/" + diskSizeInGb + " Gb Disk)");
 					product.setDescription(" (" + cpuNum + " CPU/" + ramInGB + " Gb RAM/" + diskSizeInGb + " Gb Disk)");
-					product.setRamSize(new Storage<Gigabyte>(ramInGB, Storage.GIGABYTE));
+					product.setRamSize(new Storage<Megabyte>(ramInGB*1024, Storage.MEGABYTE));
 					product.setCpuCount(cpuNum);
 					product.setRootVolumeSize(new Storage<Gigabyte>(diskSizeInGb, Storage.GIGABYTE));
 					products.add(product);
@@ -833,7 +852,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 		OpSourceMethod method = new OpSourceMethod(provider,
 				provider.buildUrl(PAUSE_VIRTUAL_MACHINE,true, parameters),
 				provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-		method.parseRequestResult("Pauseing vm",method.invoke(),"result","resultDetail");
+		method.parseRequestResult("Pausing vm",method.invoke(),"result","resultDetail");
 	}
 
 
@@ -883,113 +902,156 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
 	public void terminate(@Nonnull String serverId) throws InternalException, CloudException {
-		VirtualMachine server = getVirtualMachine(serverId);
+        if( logger.isTraceEnabled() ) {
+            logger.trace("ENTER - " + VirtualMachines.class.getName() + ".terminate(" + serverId + ")");
+        }
+        try {
+            if( logger.isInfoEnabled() ) {
+                logger.info("Beginning termination process for server " + serverId);
+            }
+            VirtualMachine server = getVirtualMachine(serverId);
 
-		if(server == null){
-			throw new CloudException("No such VM");
-		}
+            if( logger.isInfoEnabled() ) {
+                logger.info("Current state for " + serverId + ": " + (server == null ? "TERMINATED" : server.getCurrentState()));
+            }
+            if( server == null ) {
+                return;
+            }
 
-		/** Release public IP first */
-		if(server.getPublicIpAddresses() != null){
-			for(String addressId : server.getPublicIpAddresses()){
-				provider.getNetworkServices().getIpAddressSupport().releaseFromServer(addressId);
-			}
-		}
+            /** Release public IP first */
+            if( logger.isInfoEnabled() ) {
+                logger.info("Releasing public IP prior to termination...");
+            }
+            if( server.getPublicIpAddresses() != null ) {
+                for(String addressId : server.getPublicIpAddresses()){
+                    provider.getNetworkServices().getIpAddressSupport().releaseFromServer(addressId);
+                }
+            }
 
-		/** Now Pause the vm */
+            /** Now Stop the vm */
+            if( logger.isInfoEnabled() ) {
+                logger.info("Stopping the server " + serverId + " prior to termination...");
+            }
+            long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 20L);
 
-		int localAttemptToPauseVM = attemptForOperation;
+            while( System.currentTimeMillis() < timeout ) {
+                try {
+                    /** If it is pending, means it is in deployment process, need around 6 mins */
+                    server = getVirtualMachine(serverId);
 
-		while (localAttemptToPauseVM >0){
-			try {
-				/** If it is pending, means it is in deployment process, need around 6 mins */
-				server = getVirtualMachine(serverId);
+                    if( server == null ) {
+                        /** VM already killed */
+                        return;
+                    }
+                    if( server.getCurrentState().equals(VmState.STOPPED) ) {
+                        break;
+                    }
+                    if( server.getCurrentState().equals(VmState.RUNNING) ){
+                        stop(serverId);
+                        break;
+                    }
 
-				if(server == null){
-					/** VM already killed */
-					return;
-				}
+                }
+                catch( Throwable t ) {
+                    logger.warn("Error stopping VM: " + t.getMessage());
+                }
+                try { Thread.sleep(30000L); }
+                catch( InterruptedException ignore ) { }
+            }
+            if( logger.isInfoEnabled() ) {
+                logger.info("Waiting for server " + serverId + " to be STOPPED...");
+            }
+            timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 10L);
+            while( System.currentTimeMillis() < timeout ) {
+                try {
+                    server = getVirtualMachine(serverId);
+                    if( server == null ) {
+                        return;
+                    }
+                    if( server.getCurrentState().equals(VmState.TERMINATED) ) {
+                        return;
+                    }
+                    if( server.getCurrentState().equals(VmState.STOPPED) ) {
+                        break;
+                    }
+                }
+                catch( Throwable t ) {
+                    logger.warn("Error stopping VM: " + t.getMessage());
+                }
+                try { Thread.sleep(30000L); }
+                catch( InterruptedException ignore ) { }
+            }
+            if( logger.isInfoEnabled() ) {
+                logger.info("Finally terminating " + serverId + " now that it is STOPPED");
+            }
+            timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 10L);
+            while( System.currentTimeMillis() < timeout ) {
+                try {
+                    String  resultCode = killVM(serverId);
 
-				if(server.getCurrentState().equals(VmState.RUNNING)){
-					stop(serverId);
-				}else{
-					localAttemptToPauseVM = 0;
-				}
+                    if( logger.isDebugEnabled() ) {
+                        logger.debug("Server " + serverId + " termination result: " + resultCode);
+                    }
+                    if( resultCode.equals("REASON_0") ){
+                        break;
+                    }
+                    else if( resultCode.equals("REASON_395") ){
+                        logger.error(resultCode + ": Could not find VM " + serverId);
+                        throw new CloudException(resultCode + ": Could not find VM " + serverId);
+                    }
+                    else if(resultCode.equals("REASON_100")){
+                        logger.error(resultCode + ": Illegal access");
+                        throw new CloudException(resultCode + ": Illegal access");
+                    }
+                    else if(resultCode.equals("REASON_393")){
+                        logger.error("The server with " + serverId + " is associated with a Real-Server in load balancer");
+                        throw new CloudException("The server with " + serverId + " is associated with a Real-Server in load balancer");
+                    }
+                    else {
+                        try {
+                            Thread.sleep(waitTimeToAttempt);
+                            logger.info("Cleaning failed deployment for " + serverId);
+                            cleanFailedVM(serverId);
+                        }
+                        catch( Throwable ignore ) {
+                            // ignore
+                        }
+                    }
+                }
+                catch( CloudException e ) {
+                    logger.warn("Failed termination attempt: " + e.getMessage());
+                    try{
+                        Thread.sleep(waitTimeToAttempt);
+                        logger.info("Cleaning failed deployment for " + serverId);
+                        cleanFailedVM(serverId);
+                    }
+                    catch( Throwable ignore ) {
+                        // ignore
+                    }
+                }
+            }
+            if( logger.isInfoEnabled() ) {
+                logger.info("Waiting for " + serverId + " to be TERMINATED...");
+            }
+            while( System.currentTimeMillis() < timeout ) {
+                VirtualMachine vm = getVirtualMachine(serverId);
 
-			} catch (InternalException e) {
-
-			} catch (CloudException e){
-				try {
-					Thread.sleep(waitTimeToAttempt);
-					localAttemptToPauseVM--;
-				} catch (InterruptedException e1) {
-					throw new InternalException ("Fail when waiting");
-				}
-			}
-
-			int localAttemptToTerminateVM = attemptForOperation;
-
-			while (localAttemptToTerminateVM >0){
-				try {
-					/** Begin to Kill the VM */
-					server = getVirtualMachine(serverId);
-					if(server == null){
-						/** VM already killed */
-						return;
-					}
-
-					/**  In case the server is up from the booting stage */
-					if(server.getCurrentState().equals(VmState.RUNNING)){
-						stop(serverId);
-						localAttemptToTerminateVM = attemptForOperation;
-					}
-					else{
-						logger.info("Begin to kill -> " + localAttemptToTerminateVM);
-						String  resultCode = killVM(serverId);
-						if(resultCode.equals("REASON_0")){
-							/** Kill VM successfully */
-							localAttemptToTerminateVM = 0;
-						}
-						else if(resultCode.equals("REASON_395")){
-							logger.error("Could not find the server with Id" + serverId );
-							localAttemptToTerminateVM = 0;
-						}
-						else if(resultCode.equals("REASON_100")){
-							logger.error(" Invalid Credentials ");
-							localAttemptToTerminateVM = 0;
-						}
-						else if(resultCode.equals("REASON_393")){
-							logger.error("The server with " + serverId + " is associated with a Real-Server in load balancer");
-							localAttemptToTerminateVM = 0;
-						}
-						else{
-							try{
-								Thread.sleep(waitTimeToAttempt);
-								localAttemptToTerminateVM--;
-								//Failed deploy
-								logger.info("Clean Failed Deploy");
-								cleanFailedVM(serverId);
-							} catch (Throwable notPartOfTest ) {
-								//ignore
-							}
-						}
-					}
-				} catch (InternalException e) {
-					logger.error(e.getMessage());
-				} catch (CloudException e) {
-					logger.error(e.getMessage());
-					try{
-						Thread.sleep(waitTimeToAttempt);
-						localAttemptToTerminateVM--;
-						//Failed deploy
-						logger.info("Clean Failed Deploy");
-						cleanFailedVM(serverId);
-					} catch (Throwable notPartOfTest ) {
-						//ignore
-					}
-				}
-			}
-		}
+                if( vm == null || VmState.TERMINATED.equals(vm.getCurrentState()) ) {
+                    if( logger.isInfoEnabled() ) {
+                        logger.info("VM " + serverId + " successfully TERMINATED");
+                    }
+                    return;
+                }
+                try { Thread.sleep(30000L); }
+                catch( InterruptedException ignore ) { }
+            }
+            logger.warn("System timed out waiting for " + serverId + " to complete termination");
+        }
+        finally {
+            if( logger.isTraceEnabled() ) {
+                logger.trace("EXIT - " + VirtualMachines.class.getName() + ".terminate()");
+            }
+        }
 	}
 
     @Override
@@ -1149,8 +1211,8 @@ public class VirtualMachines implements VirtualMachineSupport {
 					isPending = false;
 				}         
 			}
-			else if( name.equalsIgnoreCase(nameSpaceString + "isStarted") ) {        	   
-				if(!isPending && value.equalsIgnoreCase("false")){
+			else if( name.equalsIgnoreCase(nameSpaceString + "isStarted") ) {
+				if( value.equalsIgnoreCase("false") ){
 					server.setCurrentState(VmState.STOPPED);
 				}           
 			}
@@ -1268,10 +1330,12 @@ public class VirtualMachines implements VirtualMachineSupport {
 							server.setCurrentState(VmState.PENDING);	   
 						}
 					}
-				}           
+				}
 			}
-		}      
-
+        }
+        if( isPending ) {
+            server.setCurrentState(VmState.PENDING);
+        }
 		if( server.getName() == null ) {
 			server.setName(server.getProviderVirtualMachineId());
 		}
@@ -1293,19 +1357,39 @@ public class VirtualMachines implements VirtualMachineSupport {
 			server.setArchitecture(bestArchitectureGuess);
 		}
 
-		VirtualMachineProduct product = new VirtualMachineProduct();
+		VirtualMachineProduct product = null;
+
 		if(server.getTag("cpuCount") != null && server.getTag("memory") != null ){
 			int cpuCout = Integer.valueOf((String) server.getTag("cpuCount"));
 			int memoryInMb = Integer.valueOf((String) server.getTag("memory"));
+            int diskInGb = 1;
 
 			if(server.getTag("additionalLocalStorage") == null){
 				product = getProduct(bestArchitectureGuess, cpuCout, memoryInMb, 0);
-			}else{
-				int diskInGb = Integer.valueOf((String) server.getTag("additionalLocalStorage"));
+			}
+            else{
+				diskInGb = Integer.valueOf((String) server.getTag("additionalLocalStorage"));
 				product = getProduct(bestArchitectureGuess, cpuCout, memoryInMb, diskInGb); 
 			}
+            if( product == null ) {
+                product = new VirtualMachineProduct();
+                product.setName(cpuCout + " CPU/" + (memoryInMb/1024) + "MB RAM/" + diskInGb + "GB HD");
+                product.setProviderProductId(cpuCout + ":" + memoryInMb + ":" + diskInGb);
+                product.setRamSize(new Storage<Megabyte>(memoryInMb, Storage.MEGABYTE));
+                product.setRootVolumeSize(new Storage<Gigabyte>(diskInGb, Storage.GIGABYTE));
+                product.setCpuCount(cpuCout);
+                product.setDescription(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");
+            }
 		}
-
+        if( product == null ) {
+            product = new VirtualMachineProduct();
+            product.setName("Unknown");
+            product.setProviderProductId("unknown");
+            product.setRamSize(new Storage<Megabyte>(1, Storage.MEGABYTE));
+            product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
+            product.setCpuCount(1);
+            product.setDescription("Unknown product");
+        }
 		/**  Set public address */
 		/**        String[] privateIps = server.getPrivateIpAddresses();
 

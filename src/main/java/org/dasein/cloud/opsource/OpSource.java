@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2012 enStratus Networks Inc
+ * Copyright (C) 2011-2012 enStratus Networks Inc
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,7 +57,34 @@ import org.w3c.dom.NodeList;
 
 
 public class OpSource extends AbstractCloud {
-	
+    static private @Nonnull String getLastItem(@Nonnull String name) {
+        int idx = name.lastIndexOf('.');
+
+        if( idx < 0 ) {
+            return name;
+        }
+        else if( idx == (name.length()-1) ) {
+            return "";
+        }
+        return name.substring(idx+1);
+    }
+
+    static public @Nonnull Logger getLogger(@Nonnull Class<?> cls) {
+        String pkg = getLastItem(cls.getPackage().getName());
+
+        if( pkg.equals("opsource") ) {
+            pkg = "";
+        }
+        else {
+            pkg = pkg + ".";
+        }
+        return Logger.getLogger("dasein.cloud.opsource.std." + pkg + getLastItem(cls.getName()));
+    }
+
+    static public @Nonnull Logger getWireLogger(@Nonnull Class<?> cls) {
+        return Logger.getLogger("dasein.cloud.opsource.wire." + getLastItem(cls.getPackage().getName()) + "." + getLastItem(cls.getName()));
+    }
+
 	public OpSource(){}
 	
 	/** Request URL path */
@@ -356,25 +383,7 @@ public class OpSource extends AbstractCloud {
 		}
 		return orgId;		
 	}
-	
- 	static private @Nonnull String getLastItem(@Nonnull String name) {
-        int idx = name.lastIndexOf('.');
-        
-        if( idx < 0 ) {
-            return name;
-        }
-        else if( idx == (name.length()-1) ) {
-            return "";
-        }
-        return name.substring(idx+1);
-    }
 
-   static public @Nonnull Logger getLogger(@Nonnull Class<?> cls, String context) {
-       String pkg = getLastItem(cls.getPackage().getName());
-        
-       return Logger.getLogger("dasein.cloud.opsource." + context + "." + pkg + "." + getLastItem(cls.getName()));
-   }
-   
    public String getBasicUrl() throws CloudException{
 	   String endpoint = this.getContext().getEndpoint();
 	   if(endpoint == null){
@@ -528,7 +537,7 @@ public class OpSource extends AbstractCloud {
 
     @Override
     public @Nullable String testContext() {
-        Logger logger = getLogger(OpSource.class, "std");
+        Logger logger = getLogger(OpSource.class);
         
         if( logger.isTraceEnabled() ) {
             logger.trace("enter - " + OpSource.class.getName() + ".textContext()");

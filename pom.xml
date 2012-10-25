@@ -91,7 +91,7 @@
     <dependency>
     	<groupId>org.dasein</groupId>
     	<artifactId>dasein-cloud-test</artifactId>
-    	<version>2012.04.1</version>
+    	<version>2012.09.5</version>
     	<type>jar</type>
     	<scope>test</scope>
     </dependency>
@@ -102,7 +102,8 @@
           <type>jar</type>
           <scope>test</scope>
       </dependency>
-  </dependencies>  
+  </dependencies>
+
   <build>
     <plugins>
       <plugin>

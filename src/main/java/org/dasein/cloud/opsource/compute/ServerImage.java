@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2012 enStratus Networks Inc
+ * Copyright (C) 2011-2012 enStratus Networks Inc
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,6 +50,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class ServerImage implements MachineImageSupport {
+    static private final Logger logger = OpSource.getLogger(ServerImage.class);
+
 	static private final String DEPLOYED_PATH         = "deployed";
 	
 	static private final String PENDING_DEPLOY_PATH       = "pendingDeploy";
@@ -75,7 +77,17 @@ public class ServerImage implements MachineImageSupport {
     
     public MachineImage getOpSourceImage(String imageId) throws InternalException, CloudException{
     	
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages();
+    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listCustomerMachineImages();
+
+        for( MachineImage img: images) {
+
+            if(img.getProviderMachineImageId().equals(imageId)){
+                return img;
+            }
+        }
+
+
+        images = (ArrayList<MachineImage>) listOpSourceMachineImages();
      
         for( MachineImage img: images) {       	
             
@@ -114,7 +126,7 @@ public class ServerImage implements MachineImageSupport {
     }
     
     @Override
-    public String getProviderTermForImage(Locale locale) {
+    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale) {
         return "Server Image";
     }
 
@@ -303,8 +315,6 @@ public class ServerImage implements MachineImageSupport {
      */
     
     private Iterable<MachineImage> listCustomerMachineDeployedImages() throws InternalException, CloudException {
-    	Logger logger = OpSource.getLogger(ServerImage.class, "std");
-
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachineDeployedImages()");
         }
@@ -345,8 +355,6 @@ public class ServerImage implements MachineImageSupport {
     }
     
     private Iterable<MachineImage> listCustomerMachinePendingImages() throws InternalException, CloudException {
-    	Logger logger = OpSource.getLogger(ServerImage.class, "std");
-
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachinePendingImages()");
         }
@@ -388,8 +396,6 @@ public class ServerImage implements MachineImageSupport {
     
     
     public Iterable<MachineImage> listOpSourceMachineImages() throws InternalException, CloudException {
-       	Logger logger = OpSource.getLogger(ServerImage.class, "std");
-
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
         }

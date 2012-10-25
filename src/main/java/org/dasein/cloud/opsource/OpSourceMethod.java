@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2012 enStratus Networks Inc
+ * Copyright (C) 2011-2012 enStratus Networks Inc
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,6 +78,8 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 public class OpSourceMethod {
+    static private final Logger logger = OpSource.getLogger(OpSourceMethod.class);
+    static private final Logger wire   = OpSource.getWireLogger(OpSourceMethod.class);
 
 	private Map<String,String> parameters  = null;
 	private OpSource           provider    = null;
@@ -144,9 +146,6 @@ public class OpSourceMethod {
     }
     
 	public Document invoke() throws CloudException, InternalException {
-        Logger logger = OpSource.getLogger(OpSourceMethod.class, "std");
-        Logger wire = OpSource.getLogger(OpSource.class, "wire");
-        
         if( logger.isTraceEnabled() ) {
             logger.trace("enter - " + OpSource.class.getName() + ".invoke()");
         }
@@ -316,8 +315,6 @@ public class OpSourceMethod {
 	}
 	
 	public String requestResult(String action, Document doc,String resultTag, String resultDetailTag) throws CloudException, InternalException{
-		Logger wire = OpSource.getLogger(OpSource.class, "wire");
-		
 		 if(doc== null){
 	        throw new CloudException("Action -> " + action + " failed because request reponse is null");	
 		 }
@@ -356,8 +353,6 @@ public class OpSourceMethod {
 	}
 	
 	public String requestResultCode(String action, Document doc,String resultCode) throws CloudException, InternalException{
-		Logger wire = OpSource.getLogger(OpSource.class, "wire");
-                
         if( wire.isDebugEnabled() ) {
         	wire.debug(provider.convertDomToString(doc));
         }
@@ -376,9 +371,6 @@ public class OpSourceMethod {
 	}
 	
 	public String getRequestResultId(String action, Document doc,String resultTag, String resultDetailTag) throws CloudException, InternalException{
-		Logger logger = OpSource.getLogger(OpSourceMethod.class, "std");
-		Logger wire = OpSource.getLogger(OpSource.class, "wire");
-            
         if( wire.isDebugEnabled() ) {
         	wire.debug(provider.convertDomToString(doc));
         }
@@ -391,13 +383,9 @@ public class OpSourceMethod {
     	NodeList blocks = doc.getElementsByTagName(sNS + resultTag);
 
         try{
-            System.out.println("\n");
-            System.out.println("Looking for: " + resultTag);
             StringWriter stw = new StringWriter();
             Transformer serializer = TransformerFactory.newInstance().newTransformer();
             serializer.transform(new DOMSource(doc), new StreamResult(stw));
-            System.out.println(stw.toString());
-            System.out.println("\n");
         }
         catch(Exception ex){
             ex.printStackTrace();
@@ -432,7 +420,6 @@ public class OpSourceMethod {
 	
 	public boolean requestResult(String action, Document doc) throws CloudException, InternalException{
 		
-		Logger wire = OpSource.getLogger(OpSource.class, "wire");                
         if( wire.isDebugEnabled() ) {
         	wire.debug(provider.convertDomToString(doc));
         }
@@ -464,9 +451,6 @@ public class OpSourceMethod {
 	}
 	
 	public boolean parseRequestResult(String action, Document doc, String resultTag, String resultDetailTag) throws CloudException, InternalException{
-		Logger logger = OpSource.getLogger(OpSourceMethod.class, "std");
-		Logger wire = OpSource.getLogger(OpSource.class, "wire");
-                
         if( wire.isDebugEnabled() ) {
         	wire.debug(provider.convertDomToString(doc));
         }
@@ -500,8 +484,6 @@ public class OpSourceMethod {
 	}
 	
 	private ParsedError parseError(int httpStatus, String assumedXml) throws InternalException {
-		Logger logger = OpSource.getLogger(OpSourceMethod.class, "std");
-		
 		if( logger.isTraceEnabled() ) {
 		  logger.trace("enter - " + OpSourceMethod.class.getName() + ".parseError(" + httpStatus + "," + assumedXml + ")");
 		}	
@@ -538,7 +520,7 @@ public class OpSourceMethod {
                         error.message = n.getFirstChild().getNodeValue();
                     }
                 }*/
-                System.out.println(error.code + " " + error.message);
+                logger.error(error.code + ": " + error.message);
             }
             catch( Throwable ignore ) {
                 String errorMessage = "";
@@ -581,9 +563,6 @@ public class OpSourceMethod {
     }
 	
 	private Document parseResponse(int code, String xml) throws CloudException, InternalException {
-		Logger logger = OpSource.getLogger(OpSourceMethod.class, "std");
-		Logger wire = OpSource.getLogger(OpSource.class, "wire");
-		        
 	    if( logger.isTraceEnabled() ) {
 	    	logger.trace("enter - " + OpSourceMethod.class.getName() + ".parseResponse(" + xml + ")");
 	    }
