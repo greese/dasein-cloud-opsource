@@ -252,7 +252,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Requirement identifyPasswordRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
+        return Requirement.REQUIRED;
     }
 
     @Override
