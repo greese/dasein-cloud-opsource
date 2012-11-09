@@ -41,6 +41,7 @@ import org.dasein.cloud.network.Protocol;
 import org.dasein.cloud.network.Subnet;
 
 import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
@@ -342,11 +343,12 @@ config
         
        	parameters.put(2, param);
         	
-       	OpSourceMethod method = new OpSourceMethod(provider, 
+       	/*OpSourceMethod method = new OpSourceMethod(provider,
        			provider.buildUrl(null,true, parameters),
        			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
          	
-       	Document doc = method.invoke();
+       	Document doc = method.invoke();*/
+        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{

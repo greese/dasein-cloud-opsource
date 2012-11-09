@@ -22,11 +22,7 @@ package org.dasein.cloud.opsource.compute;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 
 import javax.annotation.Nonnull;
@@ -50,6 +46,7 @@ import org.dasein.cloud.compute.VmStatistics;
 
 import org.dasein.cloud.dc.Region;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
@@ -334,8 +331,10 @@ public class VirtualMachines implements VirtualMachineSupport {
             if( logger.isDebugEnabled() ) {
                 logger.debug("Launch request for " + targetCPU + "/" + targetMemory + "/" + targetDisk + " against " + currentCPU + "/" + currentMemory);
             }
+
+            String password = getRandomPassword();
             if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
-                if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, null, "true") ) {
+                if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ) {
                     return getVirtualMachineByName(name);
                 }
                 else {
@@ -348,7 +347,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 MachineImage targetImage = imageSupport.searchImage(origImage.getPlatform(), origImage.getArchitecture(), product.getCpuCount(), product.getRamSize().intValue());
 
                 if(targetImage != null) {
-                    if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, null, "true") ){
+                    if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ){
                         return getVirtualMachineByName(name);
                     }
                     else {
@@ -361,7 +360,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 
             /** Second step deploy VM */
 
-            if( !deploy(imageId, inZoneId, name, description, withVlanId, null, "false") ) {
+            if( !deploy(imageId, inZoneId, name, description, withVlanId, password, "false") ) {
                 throw new CloudException("Fail to deploy VM without further information");
             }
 
@@ -395,6 +394,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             return server;
         }
         finally{
+            CallCache.getInstance().resetCacheTimer(OpSource.LOCATION_BASE_PATH);
             if( logger.isTraceEnabled() ) {
                 logger.trace("EXIT: " + VirtualMachine.class.getName() + ".launch()");
             }
@@ -601,16 +601,17 @@ public class VirtualMachines implements VirtualMachineSupport {
 		Element imageResourcePath = doc.createElement("imageResourcePath");
 		imageResourcePath.setTextContent(provider.getImageResourcePathFromImaged(imageId));
 
-		if(adminPassword == null){
-			adminPassword = provider.getDefaultAdminPasswordForVM();
-		}else{
-			if(adminPassword.length() < 8){
-				throw new InternalException("Password require a minimum of 8 characters!!!");
-			}
-		}
+        if(adminPassword == null){
+            adminPassword = getRandomPassword();
+        }
+        else{
+            if(adminPassword.length() < 8){
+                throw new InternalException("Password require a minimum of 8 characters!!!");
+            }
+        }
 
-		Element administratorPassword = doc.createElement("administratorPassword");
-		administratorPassword.setTextContent(adminPassword);
+        Element administratorPassword = doc.createElement("administratorPassword");
+        administratorPassword.setTextContent(adminPassword);
 
 		Element isStartElmt = doc.createElement("isStarted");
 
@@ -669,11 +670,12 @@ public class VirtualMachines implements VirtualMachineSupport {
 		Param param = new Param(OpSource.LOCATION_BASE_PATH, null);
 		parameters.put(0, param);
 
-		OpSourceMethod method = new OpSourceMethod(provider,
+		/*OpSourceMethod method = new OpSourceMethod(provider,
 				provider.buildUrl(null,true, parameters),
 				provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
 
-		Document doc = method.invoke();
+		Document doc = method.invoke();*/
+        Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters);
         String sNS = "";
         try{
             sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
@@ -1069,6 +1071,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 		OpSourceMethod method = new OpSourceMethod(provider,
 				provider.buildUrl(DESTROY_VIRTUAL_MACHINE,true, parameters),
 				provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        CallCache.getInstance().resetCacheTimer(OpSource.LOCATION_BASE_PATH);
 		return method.requestResultCode("Terminating vm",method.invoke(),"resultCode");
 	}
 
@@ -1441,6 +1444,32 @@ public class VirtualMachines implements VirtualMachineSupport {
 		}
 		return r;
 	}
+
+    static private final Random random = new Random();
+    static public String alphabet = "ABCEFGHJKMNPRSUVWXYZabcdefghjkmnpqrstuvwxyz0123456789#@()=+/{}[],.?;':|-_!$%^&*~`";
+    public String getRandomPassword() {
+        StringBuilder password = new StringBuilder();
+        int rnd = random.nextInt();
+        int length = 17;
+
+        if( rnd < 0 ) {
+            rnd = -rnd;
+        }
+        length = length + (rnd%8);
+        while( password.length() < length ) {
+            char c;
+
+            rnd = random.nextInt();
+            if( rnd < 0 ) {
+                rnd = -rnd;
+            }
+            c = (char)(rnd%255);
+            if( alphabet.contains(String.valueOf(c)) ) {
+                password.append(c);
+            }
+        }
+        return password.toString();
+    }
 
 
 	@SuppressWarnings("serial")

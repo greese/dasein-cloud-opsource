@@ -236,27 +236,7 @@ public class OpSource extends AbstractCloud {
 			return "/oec/base/image/"+ imageId;	
 		}		
 	}
-	
-	//public MachineImage  getTargetImage(int cpuNum, int memoryInMb){
-		
-	//}
-	
-	/**
-	 * OpSource require to enter a password for VM 
-	 * In dasein implementation the default password would
-	 * be set as the private key or private key plus public key
-	 * if the length of the private key is less than 8
-	 */
-	public String getDefaultAdminPasswordForVM(){
-		//private + public
-		if(defaultAdminPasswordForVM  == null){
-			defaultAdminPasswordForVM = new String (getContext().getAccessPrivate());
-        	if(defaultAdminPasswordForVM.length() < 8){        		
-        		defaultAdminPasswordForVM += new String (getContext().getAccessPublic());        	}
-		}
-		return defaultAdminPasswordForVM;
-		
-	}
+
 	public String getDefaultRegionId() throws InternalException, CloudException{
 		if(defaultRegionId == null){
 			defaultRegionId = getContext().getRegionId();		
@@ -551,10 +531,12 @@ public class OpSource extends AbstractCloud {
                 }
                 String pk = new String(ctx.getAccessPublic(), "utf-8");
 
-        		OpSourceMethod method = new OpSourceMethod(this, getRegionServiceUrl(), getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+        		//OpSourceMethod method = new OpSourceMethod(this, getRegionServiceUrl(), getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
                 
                 try {
-            		Document doc = method.invoke();
+            		//Document doc = method.invoke();
+                    HashMap<Integer, Param> parameters = (HashMap)getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null);
+                    Document doc = CallCache.getInstance().getAPICall(LOCATION_BASE_PATH, this, parameters);
             		if( logger.isDebugEnabled()) {
             			logger.debug("Found regions: "+ convertDomToString(doc));
             		}

@@ -43,6 +43,7 @@ import org.dasein.cloud.network.SubnetState;
 import org.dasein.cloud.network.VLANState;
 import org.dasein.cloud.network.VLANSupport;
 import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
@@ -167,10 +168,11 @@ public class Network implements VLANSupport {
     	param = new Param(provider.getDefaultRegionId(), null);
       	parameters.put(1, param);
     	
-    	OpSourceMethod method = new OpSourceMethod(provider, 
+    	/*OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();
+      	Document doc = method.invoke();*/
+        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{
@@ -263,10 +265,11 @@ public class Network implements VLANSupport {
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
       	
     	String vlanId = method.getRequestResultId("Creating VLan", method.invoke(), "result", "resultDetail");
-      	if(vlanId != null){      	
-      		return this.getVlan(vlanId);      		
+      	if(vlanId != null){
+              CallCache.getInstance().resetCacheTimer("networkWithLocation");
+              return this.getVlan(vlanId);
       	}else{
-      		throw new CloudException("Creating VLan fails without explaination !!!");
+              throw new CloudException("Creating VLan fails without explaination !!!");
       	}
       	
     }
@@ -295,7 +298,7 @@ public class Network implements VLANSupport {
     			provider.buildUrl("delete",true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
     	method.parseRequestResult("Removing Vlan",method.invoke(), "result", "resultDetail");
-        
+        CallCache.getInstance().resetCacheTimer("networkWithLocation");
     }
 
     @Override
@@ -844,10 +847,11 @@ public class Network implements VLANSupport {
     	
     	ArrayList<Subnet> list = new ArrayList<Subnet>();
     	
-    	OpSourceMethod method = new OpSourceMethod(provider, 
+    	/*OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();
+      	Document doc = method.invoke();*/
+        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{

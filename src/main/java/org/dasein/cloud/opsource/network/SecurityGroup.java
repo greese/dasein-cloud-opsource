@@ -37,6 +37,7 @@ import org.dasein.cloud.network.FirewallRule;
 import org.dasein.cloud.network.FirewallSupport;
 import org.dasein.cloud.network.Permission;
 import org.dasein.cloud.network.Protocol;
+import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
@@ -401,35 +402,19 @@ public class SecurityGroup implements FirewallSupport {
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param("networkWithLocation", null);
     	parameters.put(0, param);
-    	
+
     	param = new Param(provider.getDefaultRegionId(), null);
       	parameters.put(1, param);
-    	
-    	OpSourceMethod method = new OpSourceMethod(provider, 
+
+    	/*OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();
+      	Document doc = method.invoke();*/
+        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{
             sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
-
-            try{
-                TransformerFactory transfac = TransformerFactory.newInstance();
-                Transformer trans = transfac.newTransformer();
-                trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-                trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-                StringWriter sw = new StringWriter();
-                StreamResult result = new StreamResult(sw);
-                DOMSource source = new DOMSource(doc);
-                trans.transform(source, result);
-                String xmlString = sw.toString();
-            }
-            catch(Exception ex){
-                ex.printStackTrace();
-                logger.debug(ex.toString(), ex);
-            }
         }
         catch(IndexOutOfBoundsException ex){}
         NodeList matches = doc.getElementsByTagName(sNS + "network");
