@@ -177,8 +177,8 @@ public class OpSource extends AbstractCloud {
         		}             
         	}        	
         }
-     
-        return str.toString();        
+
+        return str.toString();
     }
 	
 	public Document createDoc() throws InternalException{
@@ -238,9 +238,9 @@ public class OpSource extends AbstractCloud {
 	}
 
 	public String getDefaultRegionId() throws InternalException, CloudException{
-		if(defaultRegionId == null){
+		//if(defaultRegionId == null){
 			defaultRegionId = getContext().getRegionId();		
-		}
+		//}
 		if(defaultRegionId == null){			
 			ArrayList<Region> list =  (ArrayList<Region>) getDataCenterServices().listRegions();
 			defaultRegionId = list.get(0).getProviderRegionId();

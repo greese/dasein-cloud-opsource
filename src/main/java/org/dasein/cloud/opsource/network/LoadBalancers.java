@@ -32,6 +32,7 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.IPVersion;
@@ -897,8 +898,13 @@ serverFarm/{server-farm-id}
 		return "Vip";
 	}
 
+    @Override
+    public Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
 
-	private String getRealServerIdfromServerId(String networkId, String serverId) throws InternalException, CloudException{
+
+    private String getRealServerIdfromServerId(String networkId, String serverId) throws InternalException, CloudException{
 		ArrayList<RealServer> list = (ArrayList<RealServer>) listAllRealServer(networkId);
 		if(list == null){
 			return null;

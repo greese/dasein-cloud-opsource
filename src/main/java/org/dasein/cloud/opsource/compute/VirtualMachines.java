@@ -29,20 +29,8 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import org.apache.log4j.Logger;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.Tag;
-import org.dasein.cloud.compute.Architecture;
-import org.dasein.cloud.compute.MachineImage;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.VMLaunchOptions;
-import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.compute.VirtualMachineProduct;
-import org.dasein.cloud.compute.VirtualMachineSupport;
-import org.dasein.cloud.compute.VmState;
-import org.dasein.cloud.compute.VmStatistics;
+import org.dasein.cloud.*;
+import org.dasein.cloud.compute.*;
 
 import org.dasein.cloud.dc.Region;
 import org.dasein.cloud.identity.ServiceAction;
@@ -64,9 +52,9 @@ public class VirtualMachines implements VirtualMachineSupport {
 
 	static private final String DESTROY_VIRTUAL_MACHINE = "delete";
 	static private final String CLEAN_VIRTUAL_MACHINE = "clean";
-	static private final String REBOOT_VIRTUAL_MACHINE  = "reboot";
-	static private final String START_VIRTUAL_MACHINE   = "start";
-	static private final String PAUSE_VIRTUAL_MACHINE 	= "shutdown";
+	static private final String REBOOT_VIRTUAL_MACHINE = "reboot";
+	static private final String START_VIRTUAL_MACHINE = "start";
+	static private final String PAUSE_VIRTUAL_MACHINE = "shutdown";
 	/** Node tag name */
 	//static private final String Deployed_Server_Tag = "Server";
 	static private final String Pending_Deployed_Server_Tag = "PendingDeployServer";
@@ -147,12 +135,55 @@ public class VirtualMachines implements VirtualMachineSupport {
 	}
 
 
-	@Override
+    @Override
+    public VirtualMachine alterVirtualMachine(@Nonnull String serverId, @Nonnull VMScalingOptions vmScalingOptions) throws InternalException, CloudException {
+        if(logger.isTraceEnabled()){
+            logger.trace("ENTER: " + VirtualMachine.class.getName() + ".alterVirtualMachine()");
+        }
+        try{
+            String[] parts = vmScalingOptions.getProviderProductId().split(":");
+
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+            parameters.put(0, param);
+            param = new Param(serverId, null);
+            parameters.put(1, param);
+            if(parts.length >= 1){
+                param = new Param("cpuCount", parts[0]);
+                parameters.put(2, param);
+            }
+            if(parts.length >= 2){
+                param = new Param("memory", parts[1]);
+                parameters.put(3, param);
+            }
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null, true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", null));
+            boolean success =  method.parseRequestResult("Alter vm", method.invoke(), "result", "resultDetail");
+
+            if(success)return getVirtualMachine(serverId);
+            else throw new CloudException("The attempt to alter the VM failed for an unknown reason");
+        }
+        finally {
+            if(logger.isTraceEnabled()){
+                logger.trace("EXIT: " + VirtualMachine.class.getName() + ".alterVirtualMachine()");
+            }
+        }
+    }
+
+    @Override
 	public @Nonnull VirtualMachine clone(@Nonnull String serverId, @Nonnull String intoDcId, @Nonnull String name, @Nonnull String description, boolean powerOn, String ... firewallIds) throws InternalException, CloudException {
 		throw new OperationNotSupportedException("Instances cannot be cloned.");
 	}
 
-	@Override
+    @Nullable
+    @Override
+    public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
+        return VMScalingCapabilities.getInstance(false, true);//TODO: Check that this is correct for 2013.01
+    }
+
+    @Override
 	public void disableAnalytics(String vmId) throws InternalException, CloudException {
         // NO-OP
 	}
@@ -166,6 +197,11 @@ public class VirtualMachines implements VirtualMachineSupport {
 	public @Nonnull String getConsoleOutput(@Nonnull String serverId) throws InternalException, CloudException {
 		return "";
 	}
+
+    @Override
+    public int getCostFactor(@Nonnull VmState vmState) throws InternalException, CloudException {
+        return 0;  //TODO: Implement for 2013.01
+    }
 
     @Override
     public int getMaximumVirtualMachineCount() throws CloudException, InternalException {
@@ -250,6 +286,12 @@ public class VirtualMachines implements VirtualMachineSupport {
 		return Collections.emptyList();
 	}
 
+    @Nonnull
+    @Override
+    public Requirement identifyImageRequirement(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
     @Override
     public @Nonnull Requirement identifyPasswordRequirement() throws CloudException, InternalException {
         return Requirement.REQUIRED;
@@ -263,6 +305,12 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Override
     public @Nonnull Requirement identifyShellKeyRequirement() throws CloudException, InternalException {
         return Requirement.NONE;
+    }
+
+    @Nonnull
+    @Override
+    public Requirement identifyStaticIPRequirement() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
     }
 
     @Override
@@ -734,6 +782,12 @@ public class VirtualMachines implements VirtualMachineSupport {
         return Collections.singletonList(Architecture.I64);
     }
 
+    @Nonnull
+    @Override
+    public Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
     @Override
 	public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
 		ArrayList<VirtualMachine> allList = new ArrayList<VirtualMachine>();
@@ -857,8 +911,13 @@ public class VirtualMachines implements VirtualMachineSupport {
 		method.parseRequestResult("Pausing vm",method.invoke(),"result","resultDetail");
 	}
 
+    @Override
+    public void stop(@Nonnull String s, boolean b) throws InternalException, CloudException {
+        //TODO: Implement for 2013.01
+    }
 
-	@Override
+
+    @Override
 	public void reboot(@Nonnull String serverId) throws CloudException, InternalException {
 		HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
 		Param param = new Param(OpSource.SERVER_BASE_PATH, null);
@@ -1059,6 +1118,11 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Override
     public void unpause(@Nonnull String vmId) throws CloudException, InternalException {
         throw new OperationNotSupportedException("Pause/unpause is not supported");
+    }
+
+    @Override
+    public void updateTags(@Nonnull String s, @Nonnull Tag... tags) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
     }
 
     private String killVM(String serverId) throws InternalException, CloudException {

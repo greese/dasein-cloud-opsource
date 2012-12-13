@@ -26,20 +26,11 @@ import java.util.Locale;
 import java.util.TreeSet;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import org.apache.log4j.Logger;
-import org.dasein.cloud.AsynchronousTask;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.CloudProvider;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.compute.Architecture;
-import org.dasein.cloud.compute.MachineImage;
-import org.dasein.cloud.compute.MachineImageFormat;
-import org.dasein.cloud.compute.MachineImageState;
-import org.dasein.cloud.compute.MachineImageSupport;
-import org.dasein.cloud.compute.MachineImageType;
-import org.dasein.cloud.compute.Platform;
+import org.dasein.cloud.*;
+import org.dasein.cloud.compute.*;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
@@ -52,27 +43,22 @@ import org.w3c.dom.NodeList;
 public class ServerImage implements MachineImageSupport {
     static private final Logger logger = OpSource.getLogger(ServerImage.class);
 
-	static private final String DEPLOYED_PATH         = "deployed";
+	static private final String DEPLOYED_PATH = "deployed";
 	
-	static private final String PENDING_DEPLOY_PATH       = "pendingDeploy";
+	static private final String PENDING_DEPLOY_PATH = "pendingDeploy";
 	
 	//Node tag name
 	static private final String OpSource_IMAGE_TAG = "ServerImage";
 	static private final String DEPLOYOED_IMAGE_TAG = "DeployedImage";
 	
-	static private final String DELETE_IMAGE             = "delete";
+	static private final String DELETE_IMAGE = "delete";
 	
-	static private final String CREATE_IMAGE             = "clone";
+	static private final String CREATE_IMAGE = "clone";
     
     private OpSource provider;
     
     public ServerImage(OpSource provider) {
         this.provider = provider;
-    }
-    
-    @Override
-    public void downloadImage(String machineImageId, OutputStream toOutput) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Images are not downloadable from Cloudstack.");
     }
     
     public MachineImage getOpSourceImage(String imageId) throws InternalException, CloudException{
@@ -97,8 +83,47 @@ public class ServerImage implements MachineImageSupport {
         }
         return null;    	
     }
-    
+
     @Override
+    public void addImageShare(@Nonnull String s, @Nonnull String s2) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void addPublicShare(@Nonnull String s) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public String bundleVirtualMachine(@Nonnull String s, @Nonnull MachineImageFormat machineImageFormat, @Nonnull String s2, @Nonnull String s3) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void bundleVirtualMachineAsync(@Nonnull String s, @Nonnull MachineImageFormat machineImageFormat, @Nonnull String s2, @Nonnull String s3, @Nonnull AsynchronousTask<String> stringAsynchronousTask) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public MachineImage captureImage(@Nonnull ImageCreateOptions imageCreateOptions) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void captureImageAsync(@Nonnull ImageCreateOptions imageCreateOptions, @Nonnull AsynchronousTask<MachineImage> machineImageAsynchronousTask) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Nullable
+    @Override
+    public MachineImage getImage(@Nonnull String s) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    @Deprecated
     public MachineImage getMachineImage(String imageId) throws InternalException, CloudException {
     	//First check the pending images, because it is mostly being checked by customers
     	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
@@ -126,12 +151,18 @@ public class ServerImage implements MachineImageSupport {
     }
     
     @Override
+    @Deprecated
     public @Nonnull String getProviderTermForImage(@Nonnull Locale locale) {
         return "Server Image";
     }
 
-  
-    
+    @Nonnull
+    @Override
+    public String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass imageClass) {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+
     private Architecture guess(String desc) {
         Architecture arch = Architecture.I64;
         
@@ -183,11 +214,19 @@ public class ServerImage implements MachineImageSupport {
     }
     
     @Override
+    @Deprecated
     public boolean hasPublicLibrary() {
         return true;
     }
-    
+
+    @Nonnull
     @Override
+    public Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    @Deprecated
     public AsynchronousTask<String> imageVirtualMachine(String vmId, String name, String description) throws CloudException, InternalException {
       
         final AsynchronousTask<String> task = new AsynchronousTask<String>();
@@ -210,12 +249,6 @@ public class ServerImage implements MachineImageSupport {
 
         t.start();
         return task;
-    }
-    
-
-    @Override
-    public AsynchronousTask<String> imageVirtualMachineToStorage(String vmId, String name, String description, String directory) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("OpSource does not image to storage.");
     }
     
     private MachineImage imageVirtualMachine(String vmId, String name, String description, AsynchronousTask<String> task) throws CloudException, InternalException {
@@ -258,11 +291,6 @@ public class ServerImage implements MachineImageSupport {
     }
     
     @Override
-    public String installImageFromUpload(MachineImageFormat format, InputStream imageStream) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Installing from upload is not currently supported in OpSource.");
-    }
-    
-    @Override
     public boolean isImageSharedWithPublic(String templateId) throws CloudException, InternalException {
 
         return false;
@@ -275,8 +303,27 @@ public class ServerImage implements MachineImageSupport {
     public boolean isSubscribed() throws CloudException, InternalException {
     	return true;
     }
-    
+
+    @Nonnull
     @Override
+    public Iterable<ResourceStatus> listImageStatus(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String s) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    @Deprecated
     public Iterable<MachineImage> listMachineImages() throws InternalException, CloudException {
     	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
  
@@ -435,6 +482,7 @@ public class ServerImage implements MachineImageSupport {
     }
     
     @Override
+    @Deprecated
     public Iterable<MachineImage> listMachineImagesOwnedBy(String accountId) throws CloudException, InternalException {
     	/** Only two types of owner OpSource, or customer itself */
         /** If no account specified, return all images */
@@ -448,7 +496,26 @@ public class ServerImage implements MachineImageSupport {
     @Override
     public Iterable<String> listShares(String templateId) throws CloudException, InternalException {
     	return new TreeSet<String>();     
-    }    
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public MachineImage registerImageBundle(@Nonnull ImageCreateOptions imageCreateOptions) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
     @Override
     public Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
         ArrayList<MachineImageFormat> list = new  ArrayList<MachineImageFormat>();
@@ -459,14 +526,15 @@ public class ServerImage implements MachineImageSupport {
         return list;
     }
 
+    @Nonnull
     @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
+    public Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
     }
 
     @Override
-    public String registerMachineImage(String atStorageLocation) throws CloudException, InternalException {
-    	throw new OperationNotSupportedException("Register machine image is not currently supported in OpSource.");
+    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
+        return new String[0];
     }
     
     @Override
@@ -480,7 +548,22 @@ public class ServerImage implements MachineImageSupport {
     	OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
     	method.requestResult("Removing image",method.invoke());
     }
-    
+
+    @Override
+    public void removeAllImageShares(@Nonnull String s) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void removeImageShare(@Nonnull String s, @Nonnull String s2) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void removePublicShare(@Nonnull String s) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
     public MachineImage searchImage(Platform platform, Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
     
     	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages();
@@ -510,6 +593,7 @@ public class ServerImage implements MachineImageSupport {
     }
     
     @Override
+    @Deprecated
     public Iterable<MachineImage> searchMachineImages(String keyword, Platform platform, Architecture architecture) throws InternalException, CloudException {
     	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
     	
@@ -562,14 +646,38 @@ public class ServerImage implements MachineImageSupport {
         return list;
     }
 
+    @Nonnull
     @Override
+    public Iterable<MachineImage> searchImages(@Nullable String s, @Nullable String s2, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<MachineImage> searchPublicImages(@Nullable String s, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    @Deprecated
     public void shareMachineImage(String templateId, String withAccountId, boolean allow) throws CloudException, InternalException {
     	  throw new OperationNotSupportedException("OpSource does not support share image.");
     }
-    
+
     @Override
+    @Deprecated
     public boolean supportsCustomImages() {
         return true;
+    }
+
+    @Override
+    public boolean supportsDirectImageUpload() throws CloudException, InternalException {
+        return false;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public boolean supportsImageCapture(@Nonnull MachineImageType machineImageType) throws CloudException, InternalException {
+        return false;  //TODO: Implement for 2013.01
     }
 
     @Override
@@ -581,8 +689,18 @@ public class ServerImage implements MachineImageSupport {
     public boolean supportsImageSharingWithPublic() {
         return false;
     }
-    
- 
+
+    @Override
+    public boolean supportsPublicLibrary(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
+        return false;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void updateTags(@Nonnull String s, @Nonnull Tag... tags) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+
     private MachineImage toImage(Node node, boolean isCustomerDeployed, boolean isPending, String nameSpace) throws CloudException, InternalException {
         Architecture bestArchitectureGuess = Architecture.I64;
         MachineImage image = new MachineImage();
@@ -782,12 +900,4 @@ public class ServerImage implements MachineImageSupport {
         }
         return image;       
     }
-    
-    
- 
-    @Override
-    public String transfer(CloudProvider fromCloud, String machineImageId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("OpSource does not support image transfer.");
-    }
-  
 }

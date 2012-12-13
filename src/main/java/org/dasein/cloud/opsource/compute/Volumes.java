@@ -29,17 +29,10 @@ import java.util.Locale;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.InternalException;
+import org.dasein.cloud.*;
 
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.Volume;
+import org.dasein.cloud.compute.*;
 
-import org.dasein.cloud.compute.VolumeCreateOptions;
-import org.dasein.cloud.compute.VolumeProduct;
-import org.dasein.cloud.compute.VolumeSupport;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
@@ -80,6 +73,7 @@ public class Volumes implements VolumeSupport {
 
 
     @Override
+    @Deprecated
     public @Nonnull String create(@Nonnull String snapshotId, int size, @Nonnull String zoneId) throws InternalException, CloudException {
         throw new OperationNotSupportedException("Creating volumes is not supported");
     }
@@ -103,6 +97,11 @@ public class Volumes implements VolumeSupport {
      			provider.buildUrl(null,true, parameters),
      			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
        	method.requestResult("Attaching disk",method.invoke());
+    }
+
+    @Override
+    public void detach(@Nonnull String s, boolean b) throws InternalException, CloudException {
+        //TODO: Implement for 2013.01
     }
 
     @Override
@@ -185,8 +184,22 @@ public class Volumes implements VolumeSupport {
         }
     }
 
+    @Nonnull
+    @Override
+    public Iterable<VolumeFormat> listSupportedFormats() throws InternalException, CloudException {
+        //TODO: Implement for 2013.01
+        return Collections.emptyList();
+    }
+
     @Override
     public @Nonnull Iterable<VolumeProduct> listVolumeProducts() throws InternalException, CloudException {
+        return Collections.emptyList();
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<ResourceStatus> listVolumeStatus() throws InternalException, CloudException {
+        //TODO: Implement for 2013.01
         return Collections.emptyList();
     }
 

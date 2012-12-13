@@ -18,16 +18,11 @@
 
 package org.dasein.cloud.opsource.network;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
+import java.util.*;
 import javax.annotation.Nonnull;
+
 import org.apache.log4j.Logger;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
+import org.dasein.cloud.*;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.AddressType;
@@ -176,6 +171,11 @@ public class IpAddressImplement implements IpAddressSupport {
         return "IP address";
     }
 
+    @Override
+    public Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException{
+        return null;
+    }
+
     public boolean isAssigned(AddressType type) {
         return type.equals(AddressType.PUBLIC);
     }
@@ -311,7 +311,6 @@ config
 		ArrayList<VLAN> networkList = (ArrayList<VLAN>) provider.getNetworkServices().getVlanSupport().listVlans();
 	    
 	    for(VLAN network : networkList){
-	        	
 	    	addresses.addAll((ArrayList<IpAddress>)listPublicIpPool(unassignedOnly, network.getProviderVlanId()));
         }
         return addresses;
@@ -343,12 +342,12 @@ config
         
        	parameters.put(2, param);
         	
-       	/*OpSourceMethod method = new OpSourceMethod(provider,
+       	OpSourceMethod method = new OpSourceMethod(provider,
        			provider.buildUrl(null,true, parameters),
        			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
          	
-       	Document doc = method.invoke();*/
-        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+       	Document doc = method.invoke();
+        //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{
@@ -379,8 +378,12 @@ config
                 }
             }
         }
-        
         return addresses;
+    }
+
+    @Override
+    public Iterable<ResourceStatus> listIpPoolStatus(IPVersion version){//TODO: Implement
+        return Collections.emptyList();
     }
     
     
@@ -515,6 +518,15 @@ config
             return request(AddressType.PUBLIC);
         }
         throw new OperationNotSupportedException("No support for " + version);
+    }
+
+    @Nonnull
+    @Override
+    public String requestForVLAN(@Nonnull IPVersion ipVersion, @Nonnull String s) throws InternalException, CloudException {   //TODO: Implement
+        if(ipVersion.equals(IPVersion.IPV4)){
+            throw new OperationNotSupportedException("Not yet implemented");
+        }
+        throw new OperationNotSupportedException("No support for " + ipVersion);
     }
 
     @Override

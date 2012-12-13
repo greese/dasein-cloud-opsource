@@ -28,11 +28,8 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import org.apache.log4j.Logger;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
+import org.dasein.cloud.*;
 
-import org.dasein.cloud.Requirement;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.NICCreateOptions;
@@ -803,6 +800,12 @@ public class Network implements VLANSupport {
         return Collections.emptyList();
     }
 
+    @Nonnull
+    @Override
+    public Iterable<ResourceStatus> listNetworkInterfaceStatus() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
     @Override
     public @Nonnull Iterable<NetworkInterface> listNetworkInterfaces() throws CloudException, InternalException {
         return Collections.emptyList();
@@ -875,6 +878,12 @@ public class Network implements VLANSupport {
     @Override
     public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
         return Collections.singletonList(IPVersion.IPV4);
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<ResourceStatus> listVlanStatus() throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
     }
 
     @Override

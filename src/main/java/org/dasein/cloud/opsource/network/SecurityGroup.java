@@ -30,13 +30,9 @@ import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.Direction;
-import org.dasein.cloud.network.Firewall;
-import org.dasein.cloud.network.FirewallRule;
-import org.dasein.cloud.network.FirewallSupport;
-import org.dasein.cloud.network.Permission;
-import org.dasein.cloud.network.Protocol;
+import org.dasein.cloud.network.*;
 import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
@@ -187,6 +183,18 @@ public class SecurityGroup implements FirewallSupport {
             }
         }
         throw new CloudException("Fails to authorizing firewall rule without explaination!");
+    }
+
+    @Nonnull
+    @Override
+    public String authorize(@Nonnull String s, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String s2, @Nonnull Protocol protocol, int i, int i2) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Nonnull
+    @Override
+    public String authorize(@Nonnull String s, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String s2, @Nonnull Protocol protocol, @Nonnull RuleTarget ruleTarget, int i, int i2) throws CloudException, InternalException {
+        return null;  //TODO: Implement for 2013.01
     }
 
     public String convertNetMask(String mask){
@@ -430,8 +438,24 @@ public class SecurityGroup implements FirewallSupport {
         return list;
     }
 
+    @Nonnull
+    @Override
+    public Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
+        return null;  //TODO: Implement for 2013.01
+    }
 
-   
+    @Nonnull
+    @Override
+    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean b) throws InternalException, CloudException {
+        return null;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void revoke(@Nonnull String s) throws InternalException, CloudException {
+        //TODO: Implement for 2013.01
+    }
+
+
     @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
@@ -495,8 +519,23 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
-    public boolean supportsRules(@Nonnull Direction direction, boolean inVlan) throws CloudException, InternalException {
-        return (Direction.INGRESS.equals(direction) && !inVlan);
+    public void revoke(@Nonnull String s, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String s2, @Nonnull Protocol protocol, int i, int i2) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public void revoke(@Nonnull String s, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String s2, @Nonnull Protocol protocol, @Nonnull RuleTarget ruleTarget, int i, int i2) throws CloudException, InternalException {
+        //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public boolean supportsRules(@Nonnull Direction direction, @Nonnull Permission permission, boolean b) throws CloudException, InternalException {
+        return false;  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public boolean supportsFirewallSources() throws CloudException, InternalException {
+        return false;  //TODO: Implement for 2013.01
     }
 
     private Firewall toFirewall(Node node) {
@@ -566,11 +605,17 @@ public class SecurityGroup implements FirewallSupport {
         }
         catch(IndexOutOfBoundsException ex){}
         NodeList attributes = node.getChildNodes();
-        FirewallRule rule = new FirewallRule();
-        
-        rule.setFirewallId(firewallId);
-        rule.setPermission(Permission.ALLOW);
-        rule.setDirection(Direction.INGRESS);
+
+        Permission permission = Permission.ALLOW;
+        Direction direction = Direction.INGRESS;
+        String cidr = "";
+        Protocol protocol = null;
+        int startPort = -1;
+        int endPort = -1;
+        String providerRuleId = "";
+        String source = "";
+        String destination = "";
+
         String basicRuleId = null;
         String positionId = null;
         
@@ -587,7 +632,7 @@ public class SecurityGroup implements FirewallSupport {
             }
 
             if( name.equalsIgnoreCase(sNS + "cidr") ) {
-                rule.setCidr(value);
+                cidr = value;
             }           
             else if( name.equalsIgnoreCase(sNS + "id") ) {
             	basicRuleId = value;
@@ -595,7 +640,7 @@ public class SecurityGroup implements FirewallSupport {
             	//rule.setProviderRuleId(value);
             }
             else if( name.equalsIgnoreCase(sNS + "name") ) {
-                if(!value.startsWith("default"))rule.setCidr(value);//For custom rules the name contains the proper CIDR
+                if(!value.startsWith("default"))cidr = value;//For custom rules the name contains the proper CIDR
             }
             else if( name.equalsIgnoreCase(sNS + "position") ) {
                positionId = value;
@@ -603,19 +648,19 @@ public class SecurityGroup implements FirewallSupport {
             else if( name.equalsIgnoreCase(sNS + "action") ) {
             	
             	if(value.equalsIgnoreCase("deny")){
-            		rule.setPermission(Permission.DENY);
+            		permission = Permission.DENY;
             	}else{
-            		rule.setPermission(Permission.ALLOW);
+            		permission = Permission.ALLOW;
             	}                      	
             }
             else if( name.equalsIgnoreCase(sNS + "protocol") ) {
             	
             	if(value.equalsIgnoreCase("TCP")){
-            		rule.setProtocol(Protocol.TCP);
+            		protocol = Protocol.TCP;
             	}else if (value.equalsIgnoreCase("UPD")){
-            		rule.setProtocol(Protocol.UDP);
+            		protocol = Protocol.UDP;
             	}else if (value.equalsIgnoreCase("ICMP") ){
-            		rule.setProtocol(Protocol.ICMP);
+            		protocol = Protocol.ICMP;
             	}
                 else{
                     //OpSource has a rule with an odd protocol by default that we don't want to add or display
@@ -624,7 +669,6 @@ public class SecurityGroup implements FirewallSupport {
             	
             }
             else if( name.equalsIgnoreCase(sNS + "sourceIpRange") ) {
-         		String ipAddress = null;
         		String networkMask = null;
             	NodeList ipAddresses = attribute.getChildNodes();
             	for(int j = 0 ;j < ipAddresses.getLength(); j ++){
@@ -632,20 +676,10 @@ public class SecurityGroup implements FirewallSupport {
             		if(ip.getNodeType() == Node.TEXT_NODE) continue;
    
             		if(ip.getNodeName().equals(sNS + "ipAddress") && ip.getFirstChild().getNodeValue() != null){
-            			ipAddress = ip.getFirstChild().getNodeValue();
+            			source = ip.getFirstChild().getNodeValue();
                         hasSourceIP = true;
-            		}/*else if(ip.getNodeName().equals(sNS + "netmask") && ip.getFirstChild().getNodeValue() != null){
-            			networkMask = ip.getFirstChild().getNodeValue();
-            		}*///This may have changed in the API but this doesn't exist anymore.
+            		}
             	}
-            	
-            	/*if(ipAddress != null){
-            		if(networkMask != null){
-            			rule.setCidr(ipAddress+ "/" + networkMask);
-            		}else{
-            			rule.setCidr(ipAddress+ "/" + "255.255.255.254");
-            		}            		
-            	}*/
             	  
             }
             else if( name.equalsIgnoreCase(sNS + "destinationIpRange") ) {
@@ -660,43 +694,43 @@ public class SecurityGroup implements FirewallSupport {
 	           			portType = portItem.getFirstChild().getNodeValue();	           			
 	                }
 	                else if( portItem.getNodeName().equalsIgnoreCase(sNS + "port1") && portItem.getFirstChild().getNodeValue() != null ) {
-	                	rule.setStartPort(Integer.valueOf(portItem.getFirstChild().getNodeValue()));
+	                	startPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
 	                	if(portType.equalsIgnoreCase("EQUAL_TO")){
-	                    	rule.setEndPort(Integer.valueOf(portItem.getFirstChild().getNodeValue()));
+	                    	endPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
 	                    }
 	                }
 	                else if( portItem.getNodeName().equalsIgnoreCase(sNS + "port2") && portItem.getFirstChild().getNodeValue() != null ) {
-	                	rule.setEndPort(Integer.valueOf(portItem.getFirstChild().getNodeValue()));
+	                	endPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
 	                }	                                     
            		}              	      
             }
             else if( name.equalsIgnoreCase(sNS + "type") ) {
             	if(value != null){
             		if(value.equalsIgnoreCase("INSIDE_ACL")){
-            			rule.setDirection(Direction.EGRESS);
+            			direction = Direction.EGRESS;
             		}else if (value.equalsIgnoreCase("OUTSIDE_ACL")){
-            			rule.setDirection(Direction.INGRESS);
+            			direction = Direction.INGRESS;
             		}else{
-            			rule.setDirection(Direction.INGRESS);
+            			direction = Direction.INGRESS;
             		}
             	}
             }
         }
         if(basicRuleId != null && positionId != null){
-        	rule.setProviderRuleId(basicRuleId+ ":" +positionId);
+        	providerRuleId = basicRuleId+ ":" +positionId;
         }else{
         	return null;
         }
-        if(rule.getCidr() == null && !hasSourceIP){
-        	rule.setCidr("0.0.0.0/0");
+        if((cidr == null || cidr.equals("")) && !hasSourceIP){
+        	cidr = "0.0.0.0/0";
         }
 
-        if(rule.getProtocol() == null){
+        if(protocol == null){
             //OpSource has a rule with an odd protocol by default that we don't want to add or display
             return null;
         }
-        System.out.println("RULE CIDR: " + rule.getCidr());
-        System.out.println("RULE DIRECTION: " + rule.getDirection());
+
+        FirewallRule rule = FirewallRule.getInstance(basicRuleId, firewallId, source, direction, protocol, permission, destination.equals("") ? RuleTarget.getGlobal() : RuleTarget.getCIDR(destination), startPort, endPort);
         return rule;
     }
 }
