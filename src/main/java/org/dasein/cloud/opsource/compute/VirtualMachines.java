@@ -55,6 +55,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 	static private final String REBOOT_VIRTUAL_MACHINE = "reboot";
 	static private final String START_VIRTUAL_MACHINE = "start";
 	static private final String PAUSE_VIRTUAL_MACHINE = "shutdown";
+    static private final String HARD_STOP_VIRTUAL_MACHINE = "poweroff";
 	/** Node tag name */
 	//static private final String Deployed_Server_Tag = "Server";
 	static private final String Pending_Deployed_Server_Tag = "PendingDeployServer";
@@ -141,25 +142,47 @@ public class VirtualMachines implements VirtualMachineSupport {
             logger.trace("ENTER: " + VirtualMachine.class.getName() + ".alterVirtualMachine()");
         }
         try{
-            String[] parts = vmScalingOptions.getProviderProductId().split(":");
+            String[] parts;
+            if(vmScalingOptions.getProviderProductId().contains(":")){
+                parts = vmScalingOptions.getProviderProductId().split(":");
+            }
+            else parts = new String[]{vmScalingOptions.getProviderProductId()};
 
             HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
             Param param = new Param(OpSource.SERVER_BASE_PATH, null);
             parameters.put(0, param);
             param = new Param(serverId, null);
             parameters.put(1, param);
+
+            String requestBody = "";
             if(parts.length >= 1){
-                param = new Param("cpuCount", parts[0]);
-                parameters.put(2, param);
+                try{
+                    int cpuCount = Integer.parseInt(parts[0]);
+                    if(cpuCount > 0 && cpuCount <= 8){
+                        requestBody = "cpuCount=" + cpuCount;
+                    }
+                    else throw new CloudException("Invalid CPU value. CPU count can only be up to 8.");
+                }
+                catch(Exception ex){
+                    throw new CloudException("Invalid CPU value. Ensure you are using the format CPU:RAM:HDD");
+                }
             }
             if(parts.length >= 2){
-                param = new Param("memory", parts[1]);
-                parameters.put(3, param);
+                try{
+                    int memory = Integer.parseInt(parts[1]);
+                    if(memory > 0 && memory <= 64){
+                        requestBody += "&memory=" + (memory * 1024);//Required to be in MB
+                    }
+                    else throw new CloudException("Invalid RAM value. RAM can only go up to 64GB.");
+                }
+                catch(Exception ex){
+                    throw new CloudException("Invalid RAM value. Ensure you are using the format CPU:RAM:HDD");
+                }
             }
 
             OpSourceMethod method = new OpSourceMethod(provider,
                     provider.buildUrl(null, true, parameters),
-                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", null));
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Modify, "POST", requestBody));
             boolean success =  method.parseRequestResult("Alter vm", method.invoke(), "result", "resultDetail");
 
             if(success)return getVirtualMachine(serverId);
@@ -599,11 +622,13 @@ public class VirtualMachines implements VirtualMachineSupport {
         }
     }
 
+    @Deprecated
     @Override
 	public @Nonnull VirtualMachine launch(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nonnull String inZoneId, @Nonnull String name, @Nonnull String description, String usingKey, String withVlanId, boolean withMonitoring, boolean asSandbox, String... protectedByFirewalls) throws InternalException, CloudException {
 		return launch(imageId, product, inZoneId, name, description, usingKey, withVlanId, withMonitoring, asSandbox, protectedByFirewalls, new Tag[0]);
 	}
 
+    @Deprecated
 	public @Nonnull VirtualMachine launch(@Nonnull String fromMachineImageId, @Nonnull VirtualMachineProduct product, @Nonnull String dataCenterId, @Nonnull String name, @Nonnull String description, @Nullable String withKeypairId, @Nullable String inVlanId, boolean withMonitoring, boolean asSandbox, @Nullable String[] firewalls, @Nullable Tag ... tags) throws InternalException, CloudException {
         VMLaunchOptions options;
 
@@ -904,6 +929,8 @@ public class VirtualMachines implements VirtualMachineSupport {
 		param = new Param(serverId, null);
 		parameters.put(1, param);
 
+        System.out.println("Stop URL: " + provider.buildUrl(PAUSE_VIRTUAL_MACHINE,true, parameters));
+
 		/** Gracefully power off */
 		OpSourceMethod method = new OpSourceMethod(provider,
 				provider.buildUrl(PAUSE_VIRTUAL_MACHINE,true, parameters),
@@ -912,8 +939,22 @@ public class VirtualMachines implements VirtualMachineSupport {
 	}
 
     @Override
-    public void stop(@Nonnull String s, boolean b) throws InternalException, CloudException {
-        //TODO: Implement for 2013.01
+    public void stop(@Nonnull String serverId, boolean hardOff) throws InternalException, CloudException {
+        if(!hardOff)stop(serverId);
+        else{
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+            parameters.put(0, param);
+            param = new Param(serverId, null);
+            parameters.put(1, param);
+
+            System.out.println("Stop URL: " + provider.buildUrl(HARD_STOP_VIRTUAL_MACHINE,true, parameters));
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(HARD_STOP_VIRTUAL_MACHINE,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+            method.parseRequestResult("Stopping vm",method.invoke(),"result","resultDetail");
+        }
     }
 
 

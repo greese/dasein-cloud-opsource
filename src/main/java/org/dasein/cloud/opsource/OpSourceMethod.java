@@ -266,6 +266,9 @@ public class OpSourceMethod {
                     }
                     */
         		}
+                else if(status == HttpStatus.SC_NOT_FOUND){
+                    throw new CloudException("An internal error occured: The endpoint was not found");
+                }
         		else{        			
                     /*String resultXML = null;
                     try {                    	
