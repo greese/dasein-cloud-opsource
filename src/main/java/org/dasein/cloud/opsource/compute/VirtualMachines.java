@@ -56,6 +56,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 	static private final String START_VIRTUAL_MACHINE = "start";
 	static private final String PAUSE_VIRTUAL_MACHINE = "shutdown";
     static private final String HARD_STOP_VIRTUAL_MACHINE = "poweroff";
+    static private final String ADD_LOCAL_STORAGE = "addLocalStorage";
 	/** Node tag name */
 	//static private final String Deployed_Server_Tag = "Server";
 	static private final String Pending_Deployed_Server_Tag = "PendingDeployServer";
@@ -185,7 +186,54 @@ public class VirtualMachines implements VirtualMachineSupport {
                     provider.getBasicRequestParameters(OpSource.Content_Type_Value_Modify, "POST", requestBody));
             boolean success =  method.parseRequestResult("Alter vm", method.invoke(), "result", "resultDetail");
 
-            if(success)return getVirtualMachine(serverId);
+            if(success){
+                VirtualMachine vm = getVirtualMachine(serverId);
+
+                String currentProductId = vm.getProductId();
+                int currentHDD = Integer.parseInt(currentProductId.substring(currentProductId.lastIndexOf(":")));
+                if(parts.length >= 3){
+                    try{
+                        final int newHDD = Integer.parseInt(parts[2]);
+                        if(newHDD > currentHDD){
+                            final String fServerId = serverId;
+                            Thread t = new Thread(){
+                                public void run(){
+                                    provider.hold();
+                                    try{
+                                        try{
+                                            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+                                            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+                                            parameters.put(0, param);
+                                            param = new Param(fServerId, null);
+                                            parameters.put(1, param);
+                                            param = new Param(newHDD+"", null);
+                                            parameters.put(2, param);
+
+                                            OpSourceMethod method = new OpSourceMethod(provider,
+                                                    provider.buildUrl(ADD_LOCAL_STORAGE, true, parameters),
+                                                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", null));
+                                            method.parseRequestResult("Alter vm - HDD", method.invoke(), "result", "resultDetail");
+                                        }
+                                        catch (Throwable ex){
+                                            ex.printStackTrace();
+                                        }
+                                    }
+                                    finally {
+                                        provider.release();
+                                    }
+                                }
+                            };
+                            t.setName("Alter OpSource VM: " + vm.getProviderVirtualMachineId());
+                            t.setDaemon(true);
+                            t.start();
+                        }
+                    }
+                    catch(NumberFormatException ex){
+                        throw new CloudException("Invalid format for HDD in product description.");
+                    }
+                }
+                return getVirtualMachine(serverId);
+            }
             else throw new CloudException("The attempt to alter the VM failed for an unknown reason");
         }
         finally {

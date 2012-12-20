@@ -162,8 +162,8 @@ public class Network implements VLANSupport {
         Param param = new Param("networkWithLocation", null);
     	parameters.put(0, param);
     	
-    	param = new Param(provider.getDefaultRegionId(), null);
-      	parameters.put(1, param);
+    	//param = new Param(provider.getDefaultRegionId(), null);//Removed this as it appears to break when switching regions
+      	//parameters.put(1, param);
     	
     	/*OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
