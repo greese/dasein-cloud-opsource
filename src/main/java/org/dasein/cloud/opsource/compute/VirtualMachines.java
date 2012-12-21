@@ -180,7 +180,6 @@ public class VirtualMachines implements VirtualMachineSupport {
                     throw new CloudException("Invalid RAM value. Ensure you are using the format CPU:RAM:HDD");
                 }
             }
-
             OpSourceMethod method = new OpSourceMethod(provider,
                     provider.buildUrl(null, true, parameters),
                     provider.getBasicRequestParameters(OpSource.Content_Type_Value_Modify, "POST", requestBody));
@@ -190,7 +189,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 VirtualMachine vm = getVirtualMachine(serverId);
 
                 String currentProductId = vm.getProductId();
-                int currentHDD = Integer.parseInt(currentProductId.substring(currentProductId.lastIndexOf(":")));
+                int currentHDD = Integer.parseInt(currentProductId.substring(currentProductId.lastIndexOf(":") + 1));
                 if(parts.length >= 3){
                     try{
                         final int newHDD = Integer.parseInt(parts[2]);
@@ -201,21 +200,10 @@ public class VirtualMachines implements VirtualMachineSupport {
                                     provider.hold();
                                     try{
                                         try{
-                                            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-                                            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-                                            parameters.put(0, param);
-                                            param = new Param(fServerId, null);
-                                            parameters.put(1, param);
-                                            param = new Param(newHDD+"", null);
-                                            parameters.put(2, param);
-
-                                            OpSourceMethod method = new OpSourceMethod(provider,
-                                                    provider.buildUrl(ADD_LOCAL_STORAGE, true, parameters),
-                                                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", null));
-                                            method.parseRequestResult("Alter vm - HDD", method.invoke(), "result", "resultDetail");
+                                            addLocalStorage(fServerId, newHDD);
                                         }
-                                        catch (Throwable ex){
-                                            ex.printStackTrace();
+                                        catch (Throwable th){
+                                            logger.debug("Alter VM failed while adding storage. CPU and RAM alteration may have been sucessful.");
                                         }
                                     }
                                     finally {
@@ -240,6 +228,45 @@ public class VirtualMachines implements VirtualMachineSupport {
             if(logger.isTraceEnabled()){
                 logger.trace("EXIT: " + VirtualMachine.class.getName() + ".alterVirtualMachine()");
             }
+        }
+    }
+
+    private void addLocalStorage(String serverId, int storageSize){
+        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+        parameters.put(0, param);
+        param = new Param(serverId, null);
+        parameters.put(1, param);
+
+        long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 20L);
+        Exception currentException = null;
+        while( timeout > System.currentTimeMillis() ) {
+            try{
+                System.out.println("Before Add Storage");
+                OpSourceMethod method = new OpSourceMethod(provider,
+                        provider.buildUrl(ADD_LOCAL_STORAGE + "&amount=" + storageSize, true, parameters),
+                        provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+                if(method.parseRequestResult("Alter vm - HDD", method.invoke(), "result", "resultDetail")){
+                    currentException = null;
+                    break;
+                }
+                else{
+                    currentException = new CloudException("Modification failed without explanation");
+                }
+            }
+            catch (Exception ex){
+                logger.warn("Modification failed: " + ex.getMessage());
+                currentException = ex;
+            }
+            try { Thread.sleep(30000L); }
+            catch( InterruptedException ignore ) { }
+        }
+        if( currentException == null ) {
+            logger.info("Modification succeeded");
+        }
+        else {
+            logger.error("Server could not be modified: " + currentException.getMessage());
+            currentException.printStackTrace();
         }
     }
 
