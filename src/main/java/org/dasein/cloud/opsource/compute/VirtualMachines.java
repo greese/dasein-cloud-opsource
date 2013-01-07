@@ -453,7 +453,10 @@ public class VirtualMachines implements VirtualMachineSupport {
             final String name = withLaunchOptions.getHostName();
             String description = withLaunchOptions.getDescription();
             String withVlanId = withLaunchOptions.getVlanId();
-
+            
+            System.out.println("DASEIN VLANID: " + withLaunchOptions.getVlanId());
+            System.out.println("DASEIN AS STRING: " + withVlanId);
+            
             /** First step get the target image */
             if( logger.isInfoEnabled() ) {
                 logger.info("Fetching deployment information from the target image: " + imageId);
