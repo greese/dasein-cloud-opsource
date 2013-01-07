@@ -767,7 +767,7 @@ public class Network implements VLANSupport {
 
     @Override
     public @Nonnull Requirement getSubnetSupport() throws CloudException, InternalException {
-        return Requirement.REQUIRED;
+        return Requirement.NONE;
     }
 
     public Subnet getSubnetResponseInfo( @Nonnull String continaBaseIpInfo) throws CloudException, InternalException {
