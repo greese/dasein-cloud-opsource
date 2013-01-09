@@ -487,7 +487,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
 
             final int targetCPU = Integer.parseInt(cpuCount);
-            final int targetMemory = Integer.parseInt(ramSize);
+            final int targetMemory = Integer.parseInt(ramSize)*1024;
             final int targetDisk = Integer.parseInt(volumeSizes);
             
             System.out.println("Target Cpu count: " + targetCPU);
