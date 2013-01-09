@@ -447,7 +447,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             logger.trace("ENTER - " + VirtualMachines.class.getName() + ".launch(" + withLaunchOptions + ")");
         }
         try {
-            VirtualMachineProduct product = getProduct(withLaunchOptions.getStandardProductId());
+            //VirtualMachineProduct product = getProduct(withLaunchOptions.getStandardProductId());
             String imageId = withLaunchOptions.getMachineImageId();
             String inZoneId = withLaunchOptions.getDataCenterId();
             final String name = withLaunchOptions.getHostName();
@@ -463,20 +463,46 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
             ServerImage imageSupport = provider.getComputeServices().getImageSupport();
             MachineImage origImage = imageSupport.getOpSourceImage(imageId);
-
+            
+            
+            String productString = withLaunchOptions.getStandardProductId();
+            // product id format cpu:ram:disk
+            String cpuCount;
+            String ramSize;
+            String volumeSizes;
+            String[] productIds = productString.split(":");
+            if (productIds.length == 3) {
+            	cpuCount = productIds[0];
+            	ramSize = productIds[1];
+            	volumeSizes = productIds[2];
+            }
+            else {
+            throw new InternalError("Invalid product id string");
+            }
+            
+            
             if( origImage == null ) {
                 logger.error("No such image to launch VM: " + imageId);
                 throw new CloudException("No such image to launch VM: " + imageId);
             }
 
-            final int targetCPU = product.getCpuCount();
-            final int targetMemory = product.getRamSize().intValue();
-            final int targetDisk = product.getRootVolumeSize().intValue();
+            final int targetCPU = Integer.parseInt(cpuCount);
+            final int targetMemory = Integer.parseInt(ramSize);
+            final int targetDisk = Integer.parseInt(volumeSizes);
+            
+            System.out.println("Target Cpu count: " + targetCPU);
+            System.out.println("Target Memory : " + targetMemory +" MB");
+            System.out.println("Target RootDiskVolumeSize : " + targetDisk + " GB");
+            
 
             final int currentCPU = (origImage.getTag("cpuCount") == null) ? 0 : Integer.valueOf((String)origImage.getTag("cpuCount"));
             final int currentMemory = (origImage.getTag("memory") == null) ? 0 : Integer.valueOf((String)origImage.getTag("memory"));
             final int currentDisk = 10;
-
+            
+            System.out.println("Current Cpu count: " + currentCPU);
+            System.out.println("Current Memory : " + currentMemory +" MB");
+            System.out.println("Current RootDiskVolumeSize : " + currentDisk + " GB"); 
+            
             if( logger.isDebugEnabled() ) {
                 logger.debug("Launch request for " + targetCPU + "/" + targetMemory + "/" + targetDisk + " against " + currentCPU + "/" + currentMemory);
             }
@@ -493,7 +519,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
             else if( targetDisk == 0 && ((targetCPU == 1 && targetMemory == 2048) || (targetCPU == 2 && targetMemory == 4096) || (targetCPU == 4 && targetMemory == 6144))){
                 /**  If it is Opsource OS, then get the target image with the same cpu and memory */
-                MachineImage targetImage = imageSupport.searchImage(origImage.getPlatform(), origImage.getArchitecture(), product.getCpuCount(), product.getRamSize().intValue());
+                MachineImage targetImage = imageSupport.searchImage(origImage.getPlatform(), origImage.getArchitecture(), targetCPU, targetMemory);
 
                 if(targetImage != null) {
                     if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ){
