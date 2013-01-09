@@ -255,7 +255,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 }
             }
             catch (Exception ex){
-                logger.warn("Modification failed: " + ex.getMessage());
+                logger.warn("Modification of local storage failed: " + ex.getMessage());
                 currentException = ex;
             }
             try { Thread.sleep(30000L); }
@@ -621,14 +621,14 @@ public class VirtualMachines implements VirtualMachineSupport {
                             }
                         }
                         catch( Exception e ) {
-                            logger.warn("Modification failed: " + e.getMessage());
+                            logger.warn("Modification of CPU and Memory failed: " + e.getMessage());
                             currentException = e;
                         }
                         try { Thread.sleep(30000L); }
                         catch( InterruptedException ignore ) { }
                     }
                     if( currentException == null ) {
-                        logger.info("Modification succeeded");
+                        logger.info("Modification of CPU and Memory succeeded");
                     }
                     else {
                         logger.error("Server could not be modified: " + currentException.getMessage());
@@ -887,7 +887,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 				}
 				while(ramInGB <= 4*cpuNum && ramInGB <=  maxMemInGB){
 					product = new VirtualMachineProduct();
-					product.setProviderProductId(cpuNum + ":" + ramInGB + ":" + disk);
+					product.setProviderProductId(cpuNum + ":" + ramInGB + ":" + diskSizeInGb);
 					product.setName(" (" + cpuNum + " CPU/" + ramInGB + " Gb RAM/" + diskSizeInGb + " Gb Disk)");
 					product.setDescription(" (" + cpuNum + " CPU/" + ramInGB + " Gb RAM/" + diskSizeInGb + " Gb Disk)");
 					product.setRamSize(new Storage<Megabyte>(ramInGB*1024, Storage.MEGABYTE));
