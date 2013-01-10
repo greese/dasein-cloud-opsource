@@ -242,7 +242,6 @@ public class VirtualMachines implements VirtualMachineSupport {
         Exception currentException = null;
         while( timeout > System.currentTimeMillis() ) {
             try{
-                System.out.println("Before Add Storage");
                 OpSourceMethod method = new OpSourceMethod(provider,
                         provider.buildUrl(ADD_LOCAL_STORAGE + "&amount=" + storageSize, true, parameters),
                         provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
@@ -454,9 +453,6 @@ public class VirtualMachines implements VirtualMachineSupport {
             String description = withLaunchOptions.getDescription();
             String withVlanId = withLaunchOptions.getVlanId();
             
-            System.out.println("DASEIN VLANID: " + withLaunchOptions.getVlanId());
-            System.out.println("DASEIN AS STRING: " + withVlanId);
-            
             /** First step get the target image */
             if( logger.isInfoEnabled() ) {
                 logger.info("Fetching deployment information from the target image: " + imageId);
@@ -477,7 +473,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             	volumeSizes = productIds[2];
             }
             else {
-            throw new InternalError("Invalid product id string");
+                throw new InternalError("Invalid product id string");
             }
             
             
@@ -489,19 +485,10 @@ public class VirtualMachines implements VirtualMachineSupport {
             final int targetCPU = Integer.parseInt(cpuCount);
             final int targetMemory = Integer.parseInt(ramSize)*1024;
             final int targetDisk = Integer.parseInt(volumeSizes);
-            
-            System.out.println("Target Cpu count: " + targetCPU);
-            System.out.println("Target Memory : " + targetMemory +" MB");
-            System.out.println("Target RootDiskVolumeSize : " + targetDisk + " GB");
-            
 
             final int currentCPU = (origImage.getTag("cpuCount") == null) ? 0 : Integer.valueOf((String)origImage.getTag("cpuCount"));
             final int currentMemory = (origImage.getTag("memory") == null) ? 0 : Integer.valueOf((String)origImage.getTag("memory"));
             final int currentDisk = 10;
-            
-            System.out.println("Current Cpu count: " + currentCPU);
-            System.out.println("Current Memory : " + currentMemory +" MB");
-            System.out.println("Current RootDiskVolumeSize : " + currentDisk + " GB"); 
             
             if( logger.isDebugEnabled() ) {
                 logger.debug("Launch request for " + targetCPU + "/" + targetMemory + "/" + targetDisk + " against " + currentCPU + "/" + currentMemory);
@@ -1033,8 +1020,6 @@ public class VirtualMachines implements VirtualMachineSupport {
 		param = new Param(serverId, null);
 		parameters.put(1, param);
 
-        System.out.println("Stop URL: " + provider.buildUrl(PAUSE_VIRTUAL_MACHINE,true, parameters));
-
 		/** Gracefully power off */
 		OpSourceMethod method = new OpSourceMethod(provider,
 				provider.buildUrl(PAUSE_VIRTUAL_MACHINE,true, parameters),
@@ -1051,8 +1036,6 @@ public class VirtualMachines implements VirtualMachineSupport {
             parameters.put(0, param);
             param = new Param(serverId, null);
             parameters.put(1, param);
-
-            System.out.println("Stop URL: " + provider.buildUrl(HARD_STOP_VIRTUAL_MACHINE,true, parameters));
 
             OpSourceMethod method = new OpSourceMethod(provider,
                     provider.buildUrl(HARD_STOP_VIRTUAL_MACHINE,true, parameters),

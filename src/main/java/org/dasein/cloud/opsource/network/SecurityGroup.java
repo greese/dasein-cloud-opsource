@@ -182,7 +182,7 @@ public class SecurityGroup implements FirewallSupport {
 
             }
         }
-        throw new CloudException("Fails to authorizing firewall rule without explaination!");
+        throw new CloudException("Fails to authorize firewall rule without explaination.");
     }
 
     @Nonnull
@@ -341,6 +341,7 @@ public class SecurityGroup implements FirewallSupport {
     		String position = String.valueOf(i);
     		boolean isExist = false;
     		for(FirewallRule rule: list){
+
     			if(position.equals(getFirewallPositionIdFromDaseinRuleId(rule.getProviderRuleId()))){
     				isExist = true;
     				break;
@@ -390,7 +391,7 @@ public class SecurityGroup implements FirewallSupport {
         if(matches != null){
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);            
-                FirewallRule rule = toRule(firewallId,node);                
+                FirewallRule rule = toRule(firewallId,node);
                 if( rule != null ) {
                 	list.add(rule);
                 }
@@ -730,7 +731,7 @@ public class SecurityGroup implements FirewallSupport {
             return null;
         }
 
-        FirewallRule rule = FirewallRule.getInstance(basicRuleId, firewallId, source, direction, protocol, permission, destination.equals("") ? RuleTarget.getGlobal() : RuleTarget.getCIDR(destination), startPort, endPort);
+        FirewallRule rule = FirewallRule.getInstance(providerRuleId, firewallId, source, direction, protocol, permission, destination.equals("") ? RuleTarget.getGlobal() : RuleTarget.getCIDR(destination), startPort, endPort);
         return rule;
     }
 }
