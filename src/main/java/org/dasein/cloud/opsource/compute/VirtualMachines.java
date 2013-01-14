@@ -483,7 +483,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
 
             final int targetCPU = Integer.parseInt(cpuCount);
-            final int targetMemory = Integer.parseInt(ramSize)*1024;
+            final int targetMemory = Integer.parseInt(ramSize);
             final int targetDisk = Integer.parseInt(volumeSizes);
 
             final int currentCPU = (origImage.getTag("cpuCount") == null) ? 0 : Integer.valueOf((String)origImage.getTag("cpuCount"));
@@ -826,7 +826,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 		VirtualMachineProduct product;
 		/** OpSource enables any combination of CPU (1 -8 for East 1-4 or west) and RAM (1 - 64G for East and 1-32G for west) */
 
-		int maxCPUNum = 0, maxMemInGB =0,  diskSizeInGb = 0;
+		int maxCPUNum = 0, maxMemInGB =0,  diskSizeInGB = 0, maxMemInMB = 0;
 
 		/** Obtain the maximum CPU and Memory for each data center */
 		String regionId = provider.getDefaultRegionId();
@@ -854,13 +854,14 @@ public class VirtualMachines implements VirtualMachineSupport {
 				RegionComputingPower r = toRegionComputingPower(item, sNS);
 				if( r.getProviderRegionId().equals(regionId)){
 					maxCPUNum = r.getMaxCPUNum();
-					maxMemInGB = r.getMaxMemInMB()/1024;
+					maxMemInMB = r.getMaxMemInMB();
+					maxMemInGB = maxMemInMB/1024;
 				}
 			}
 		}
 
 		for( int disk = 0 ; disk < 6; disk ++ ){
-			diskSizeInGb = disk * 50;
+			diskSizeInGB = disk * 50;
 
 			for(int cpuNum =1;cpuNum <= maxCPUNum;cpuNum ++){
 				/**
@@ -868,24 +869,24 @@ public class VirtualMachines implements VirtualMachineSupport {
 				 * cpuNum = 3, 4, min ram 4, max ram = 32
 				 * cpuNum = 1, 2, max ram = 8
 				 */
-				int ramInGB = 1*cpuNum;
+				int ramInMB = 1024*cpuNum;
 				if(cpuNum <=2){
-					ramInGB = 1;
+					ramInMB = 1024;
 				}
-				while(ramInGB <= 4*cpuNum && ramInGB <=  maxMemInGB){
+				while((ramInMB/1024) <= 4*cpuNum && ramInMB <=  maxMemInMB){
 					product = new VirtualMachineProduct();
-					product.setProviderProductId(cpuNum + ":" + ramInGB + ":" + diskSizeInGb);
-					product.setName(" (" + cpuNum + " CPU/" + ramInGB + " Gb RAM/" + diskSizeInGb + " Gb Disk)");
-					product.setDescription(" (" + cpuNum + " CPU/" + ramInGB + " Gb RAM/" + diskSizeInGb + " Gb Disk)");
-					product.setRamSize(new Storage<Megabyte>(ramInGB*1024, Storage.MEGABYTE));
+					product.setProviderProductId(cpuNum + ":" + ramInMB + ":" + diskSizeInGB);
+					product.setName(" (" + cpuNum + " CPU/" + ramInMB + " MB RAM/" + diskSizeInGB + " GB Disk)");
+					product.setDescription(" (" + cpuNum + " CPU/" + ramInMB + " MB RAM/" + diskSizeInGB + " GB Disk)");
+					product.setRamSize(new Storage<Megabyte>(ramInMB, Storage.MEGABYTE));
 					product.setCpuCount(cpuNum);
-					product.setRootVolumeSize(new Storage<Gigabyte>(diskSizeInGb, Storage.GIGABYTE));
+					product.setRootVolumeSize(new Storage<Gigabyte>(diskSizeInGB, Storage.GIGABYTE));
 					products.add(product);
 
 					if(cpuNum <=2){
-						ramInGB = ramInGB + 1;
+						ramInMB = ramInMB + 1024;
 					}else{
-						ramInGB = ramInGB + ramInGB;
+						ramInMB = ramInMB + ramInMB;
 					}
 				}
 			}
