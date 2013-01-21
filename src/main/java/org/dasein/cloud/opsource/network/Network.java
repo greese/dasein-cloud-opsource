@@ -165,11 +165,11 @@ public class Network implements VLANSupport {
     	//param = new Param(provider.getDefaultRegionId(), null);//Removed this as it appears to break when switching regions
       	//parameters.put(1, param);
     	
-    	/*OpSourceMethod method = new OpSourceMethod(provider,
+    	OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();*/
-        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+      	Document doc = method.invoke();
+        //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{
@@ -850,11 +850,11 @@ public class Network implements VLANSupport {
     	
     	ArrayList<Subnet> list = new ArrayList<Subnet>();
     	
-    	/*OpSourceMethod method = new OpSourceMethod(provider,
+    	OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();*/
-        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+      	Document doc = method.invoke();
+        //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{
