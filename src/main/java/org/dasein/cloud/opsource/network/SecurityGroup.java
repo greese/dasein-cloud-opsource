@@ -70,21 +70,24 @@ public class SecurityGroup implements FirewallSupport {
     private OpSource provider;
     
     SecurityGroup(OpSource provider) { this.provider = provider; }
-    
-    /**
-     * URL: https://<Cloud API URL>/oec/0.9/{org-id}/network/{networkid}/aclrule
-	**/    
+
     @Override
-    @Deprecated
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int startPort, int endPort) throws CloudException, InternalException {
-        return authorize(firewallId, Direction.INGRESS, cidr, protocol, startPort, endPort);
+    public @Nonnull String authorize(@Nonnull String securityGroupId, @Nonnull String cidr, @Nonnull Protocol protocol, int startPort, int endPort) throws CloudException, InternalException {
+        return authorize(securityGroupId, Direction.INGRESS, cidr, protocol, startPort, endPort);
     }
 
     @Override
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        if( !Direction.INGRESS.equals(direction) ) {
-            throw new OperationNotSupportedException("No egress rules allowed yet");
-        }
+        return authorize(firewallId, direction, Permission.ALLOW, cidr, protocol, RuleTarget.getGlobal(), beginPort, endPort);
+    }
+
+    @Override
+    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
+        return authorize(firewallId, direction, permission, cidr, protocol, RuleTarget.getGlobal(), beginPort, endPort);
+    }
+
+    @Override
+    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, @Nonnull RuleTarget destination, int beginPort, int endPort) throws CloudException, InternalException {
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
         parameters.put(0, param);
@@ -99,7 +102,8 @@ public class SecurityGroup implements FirewallSupport {
         Document doc = provider.createDoc();
         Element aclRule = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "AclRule");
         Element nameElmt = doc.createElement("name");
-        nameElmt.setTextContent(cidr);
+        if(direction.equals(Direction.INGRESS)) nameElmt.setTextContent(cidr);
+        else nameElmt.setTextContent(destination.getCidr());
 
         Element positionElmt = doc.createElement("position");
 
@@ -112,59 +116,139 @@ public class SecurityGroup implements FirewallSupport {
 
         Element actionElmt = doc.createElement("action");
         //<!-- mandatory, string, one of (PERMIT,DENY) -->
-        actionElmt.setTextContent("PERMIT");
+        actionElmt.setTextContent(permission.equals(Permission.ALLOW) ? "PERMIT" : "DENY");
 
         Element protocolElmt = doc.createElement("protocol");
-        protocolElmt.setTextContent(protocol.name());
+        String protocolType = "";
+        if(protocol.equals(Protocol.IPSEC))protocolType = "IP";//Filthy hack to allow IP type as a protocol
+        else protocolType = protocol.name();
+        protocolElmt.setTextContent(protocolType);
 
-        String ipAddress="0.0.0.0";
-        String mask = null;
+        String sourceIp="0.0.0.0";
+        String sourceMask = null;
+        boolean singleIp = false;
 
         if(cidr != null){
-            String[] ipInfo = cidr.split("/");
-            ipAddress = ipInfo[0];
-            if(ipInfo.length >1){
-                mask = convertNetMask(ipInfo[1]);
+            if(cidr.contains("/")){
+                String[] ipInfo = cidr.split("/");
+                sourceIp = ipInfo[0];
+                if(ipInfo.length >1){
+                    sourceMask = convertNetMask(ipInfo[1]);
+                }
+            }
+            else{
+                sourceIp = cidr;
+                singleIp = true;
             }
         }
 
         Element sourceIpRange = doc.createElement("sourceIpRange");
         Element sourceIpAddress = doc.createElement("ipAddress");
-        sourceIpAddress.setTextContent(ipAddress);
+        sourceIpAddress.setTextContent(sourceIp);
         sourceIpRange.appendChild(sourceIpAddress);
 
         /** OpSource can not accept cidr style as IP/255.255.255.255, therefore when it is only one IP, ignore */
-        if(mask != null && !mask.equals("255.255.255.255") ){
+        if(!singleIp && sourceMask != null && !sourceMask.equals("255.255.255.255") ){
             Element sourceNetMask = doc.createElement("netmask");
-            sourceNetMask.setTextContent(mask);
+            sourceNetMask.setTextContent(sourceMask);
             sourceIpRange.appendChild(sourceNetMask);
         }
+
+        String destinationIp = "0.0.0.0";
+        String destinationMask = null;
+        singleIp = false;
+        if(destination.getCidr() != null){
+            if(destination.getCidr().contains("/")){
+                String[] ipInfo = destination.getCidr().split("/");
+                destinationIp = ipInfo[0];
+                if(ipInfo.length > 1){
+                    destinationMask = convertNetMask(ipInfo[1]);
+                }
+            }
+            else{
+                destinationIp = destination.getCidr();
+                singleIp = true;
+            }
+        }
+
         Element destinationIpRange = doc.createElement("destinationIpRange");
+        Element destinationIpAddress = doc.createElement("ipAddress");
+        destinationIpAddress.setTextContent(destinationIp);
+        destinationIpRange.appendChild(destinationIpAddress);
+
+        if(!singleIp && destinationMask != null && !destinationMask.equals("255.255.255.255") ){
+            Element destinationNetMask = doc.createElement("netmask");
+            destinationNetMask.setTextContent(destinationMask);
+            destinationIpRange.appendChild(destinationNetMask);
+        }
+
         Element portRange = doc.createElement("portRange");
+        Element portRangeType = doc.createElement("type");
+        if(!protocol.equals(Protocol.IPSEC)){
+            portRangeType.setTextContent("EQUAL_TO");
+
+            Element port = doc.createElement("port1");
+            port.setTextContent(String.valueOf(beginPort));
+            portRange.appendChild(portRangeType);
+            portRange.appendChild(port);
+        }
+        else{
+            portRangeType.setTextContent("ALL");
+            portRange.appendChild(portRangeType);
+        }
+
+
         Element type = doc.createElement("type");
-
-        /** (ALL,EQUAL_TO,RANGE,GREATER_THAN,LESS_THAN); Set as default EQUAL_TO */
-        type.setTextContent("EQUAL_TO");
-
-        Element port = doc.createElement("port1");
-        port.setTextContent(String.valueOf(beginPort));
-        portRange.appendChild(type);
-        portRange.appendChild(port);
+        type.setTextContent(direction.equals(Direction.INGRESS) ? "OUTSIDE_ACL" : "INSIDE_ACL");
 
         aclRule.appendChild(nameElmt);
         aclRule.appendChild(positionElmt);
         aclRule.appendChild(actionElmt);
         aclRule.appendChild(protocolElmt);
-        aclRule.appendChild(protocolElmt);
+        //aclRule.appendChild(protocolElmt);
         aclRule.appendChild(sourceIpRange);
         aclRule.appendChild(destinationIpRange);
         aclRule.appendChild(portRange);
         doc.appendChild(aclRule);
 
+        try{
+            TransformerFactory transfac = TransformerFactory.newInstance();
+            Transformer trans = transfac.newTransformer();
+            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            StringWriter sw = new StringWriter();
+            StreamResult result = new StreamResult(sw);
+            DOMSource source = new DOMSource(doc);
+            trans.transform(source, result);
+            String xmlString = sw.toString();
+            System.out.println(xmlString);
+        }
+        catch(Exception ex){
+            ex.printStackTrace();
+        }
+
         OpSourceMethod method = new OpSourceMethod(provider,
                 provider.buildUrl(null,true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
         Document responseDoc = method.invoke();
+
+        try{
+            TransformerFactory transfac = TransformerFactory.newInstance();
+            Transformer trans = transfac.newTransformer();
+            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            StringWriter sw = new StringWriter();
+            StreamResult result = new StreamResult(sw);
+            DOMSource source = new DOMSource(responseDoc);
+            trans.transform(source, result);
+            String xmlString = sw.toString();
+            System.out.println(xmlString);
+        }
+        catch(Exception ex){
+            ex.printStackTrace();
+        }
 
         Node item = responseDoc.getDocumentElement();
         String sNS = "";
@@ -183,18 +267,6 @@ public class SecurityGroup implements FirewallSupport {
             }
         }
         throw new CloudException("Fails to authorize firewall rule without explaination.");
-    }
-
-    @Nonnull
-    @Override
-    public String authorize(@Nonnull String s, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String s2, @Nonnull Protocol protocol, int i, int i2) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public String authorize(@Nonnull String s, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String s2, @Nonnull Protocol protocol, @Nonnull RuleTarget ruleTarget, int i, int i2) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
     }
 
     public String convertNetMask(String mask){
@@ -387,6 +459,23 @@ public class SecurityGroup implements FirewallSupport {
         }
         catch(IndexOutOfBoundsException ex){}
 
+        try{
+            TransformerFactory transfac = TransformerFactory.newInstance();
+            Transformer trans = transfac.newTransformer();
+            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            StringWriter sw = new StringWriter();
+            StreamResult result = new StreamResult(sw);
+            DOMSource source = new DOMSource(doc);
+            trans.transform(source, result);
+            String xmlString = sw.toString();
+            System.out.println(xmlString);
+        }
+        catch(Exception ex){
+            ex.printStackTrace();
+        }
+
         NodeList matches = doc.getElementsByTagName(sNS + "AclRule");
         if(matches != null){
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -415,11 +504,11 @@ public class SecurityGroup implements FirewallSupport {
     	param = new Param(provider.getDefaultRegionId(), null);
       	parameters.put(1, param);
 
-    	/*OpSourceMethod method = new OpSourceMethod(provider,
+    	OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();*/
-        Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+      	Document doc = method.invoke();
+        //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{
@@ -637,8 +726,6 @@ public class SecurityGroup implements FirewallSupport {
             }           
             else if( name.equalsIgnoreCase(sNS + "id") ) {
             	basicRuleId = value;
-            	
-            	//rule.setProviderRuleId(value);
             }
             else if( name.equalsIgnoreCase(sNS + "name") ) {
                 if(!value.startsWith("default"))cidr = value;//For custom rules the name contains the proper CIDR
@@ -663,6 +750,9 @@ public class SecurityGroup implements FirewallSupport {
             	}else if (value.equalsIgnoreCase("ICMP") ){
             		protocol = Protocol.ICMP;
             	}
+                else if (value.equalsIgnoreCase("IP")){
+                    protocol = Protocol.IPSEC;
+                }
                 else{
                     //OpSource has a rule with an odd protocol by default that we don't want to add or display
                     return null;
@@ -684,7 +774,7 @@ public class SecurityGroup implements FirewallSupport {
             	  
             }
             else if( name.equalsIgnoreCase(sNS + "destinationIpRange") ) {
-            	//TODO    
+            	//TODO
             }
             else if( name.equalsIgnoreCase(sNS + "portRange") ) {
             	NodeList portAttributes  = attribute.getChildNodes();
