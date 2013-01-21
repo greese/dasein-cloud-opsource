@@ -189,7 +189,8 @@ public class VirtualMachines implements VirtualMachineSupport {
                 VirtualMachine vm = getVirtualMachine(serverId);
 
                 String currentProductId = vm.getProductId();
-                int currentHDD = Integer.parseInt(currentProductId.substring(currentProductId.lastIndexOf(":") + 1));
+
+                final int currentHDD = Integer.parseInt(currentProductId.substring(currentProductId.lastIndexOf(":") + 1));
                 if(parts.length >= 3){
                     try{
                         final int newHDD = Integer.parseInt(parts[2]);
@@ -200,7 +201,8 @@ public class VirtualMachines implements VirtualMachineSupport {
                                     provider.hold();
                                     try{
                                         try{
-                                            addLocalStorage(fServerId, newHDD);
+                                            int deltaHDD = newHDD - currentHDD;
+                                            addLocalStorage(fServerId, deltaHDD);
                                         }
                                         catch (Throwable th){
                                             logger.debug("Alter VM failed while adding storage. CPU and RAM alteration may have been sucessful.");
@@ -355,7 +357,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 			logger.debug("Identify VM with VM Name " + name);
 		}
 
-		ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>) listePendingServers();
+		ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>) listPendingServers();
 		for(VirtualMachine vm : list ){
 			if(vm.getName().equals(name)){
 				return vm;
@@ -909,7 +911,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 	public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
 		ArrayList<VirtualMachine> allList = new ArrayList<VirtualMachine>();
 		/** List the pending Server first */
-		ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>) listePendingServers();
+		ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>) listPendingServers();
 
 		if(list != null){
 			allList.addAll(list);
@@ -958,7 +960,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 	}
 
 
-	private Iterable<VirtualMachine> listePendingServers() throws InternalException, CloudException {
+	private Iterable<VirtualMachine> listPendingServers() throws InternalException, CloudException {
 		ArrayList<VirtualMachine> list = new ArrayList<VirtualMachine>();
 
 		/** Get pending deploy server */
@@ -1349,31 +1351,31 @@ public class VirtualMachines implements VirtualMachineSupport {
 					return null;
 				}
 				server.setProviderVlanId(vlanId); 
-			} 
-			else if( name.equalsIgnoreCase(nameSpaceString + "operatingSystem") ) {            	
-				NodeList osAttributes  = attribute.getChildNodes();
-				for(int j=0;j<osAttributes.getLength();j++ ){
-					Node os = osAttributes.item(j);
-					String osName = os.getNodeName();              
-					String osValue ;
-					if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
-						osValue = os.getFirstChild().getNodeValue();
-					}else{
-						osValue = null ; 
-					}
-
-					if( osValue != null && osValue.contains("64") ) {
-						bestArchitectureGuess = Architecture.I64;
-					}
-					else if( osValue != null && osValue.contains("32") ) {
-						bestArchitectureGuess = Architecture.I32;
-					}
-					if( osValue != null ) {
-						server.setPlatform(Platform.guess(osValue));
-						break;
-					}           		 
-				}           
 			}
+            else if( name.equalsIgnoreCase(nameSpaceString + "operatingSystem") ) {
+                NodeList osAttributes  = attribute.getChildNodes();
+                for(int j=0;j<osAttributes.getLength();j++ ){
+                    Node os = osAttributes.item(j);
+                    String osName = os.getNodeName();
+                    String osValue ;
+                    if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
+                        osValue = os.getFirstChild().getNodeValue();
+                    }else{
+                        osValue = null ;
+                    }
+
+                    if( osValue != null && osValue.contains("64") ) {
+                        bestArchitectureGuess = Architecture.I64;
+                    }
+                    else if( osValue != null && osValue.contains("32") ) {
+                        bestArchitectureGuess = Architecture.I32;
+                    }
+                    if( osValue != null ) {
+                        server.setPlatform(Platform.guess(osValue));
+                        break;
+                    }
+                }
+            }
 			else if( name.equalsIgnoreCase(nameSpaceString + "cpuCount") ) {
 				server.getTags().put("cpuCount", value);
 			}
@@ -1432,8 +1434,8 @@ public class VirtualMachines implements VirtualMachineSupport {
 			else if(name.equalsIgnoreCase(nameSpaceString + "machineSpecification") ) {
 				NodeList machineAttributes  = attribute.getChildNodes();
 				for(int j=0;j<machineAttributes.getLength();j++ ){
-					Node machine = machineAttributes.item(j);	           		
-					if(machine.getNodeType() == Node.TEXT_NODE) continue;	           		
+					Node machine = machineAttributes.item(j);
+					if(machine.getNodeType() == Node.TEXT_NODE) continue;
 
 					if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "operatingSystem") ){
 						NodeList osAttributes  = machine.getChildNodes();
@@ -1441,27 +1443,30 @@ public class VirtualMachines implements VirtualMachineSupport {
 							Node os = osAttributes.item(k);
 
 							if(os.getNodeType() == Node.TEXT_NODE) continue;
-							String osName = os.getNodeName();              
+							String osName = os.getNodeName();
 							String osValue = null ;
 
-							if(osName.equalsIgnoreCase(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
+							if(osName.equalsIgnoreCase(nameSpaceString + "displayName") && os.hasChildNodes()) {
 								osValue = os.getFirstChild().getNodeValue();
-							}else if(osName.equalsIgnoreCase(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-								osValue = os.getFirstChild().getNodeValue();
-								server.setPlatform(Platform.guess(osValue));			                       
+                                Platform platform = Platform.guess(osValue);
+                                if(platform.equals(Platform.UNKNOWN)){
+                                    platform = Platform.UNIX;
+                                }
+                                server.setPlatform(platform);
+
+                                if(osValue != null && osValue.contains("64") ) {
+                                    bestArchitectureGuess = Architecture.I64;
+                                }
+                                else if(osValue != null && osValue.contains("32") ) {
+                                    bestArchitectureGuess = Architecture.I32;
+                                }
 							}
-							if(osValue != null && osValue.contains("64") ) {
-								bestArchitectureGuess = Architecture.I64;
-							}
-							else if(osValue != null && osValue.contains("32") ) {
-								bestArchitectureGuess = Architecture.I32;
-							}		            		     		 
 						}
 					}else if( machine.getNodeName().equalsIgnoreCase(nameSpaceString + "cpuCount") && machine.getFirstChild().getNodeValue() != null ) {
 						server.getTags().put("cpuCount", machine.getFirstChild().getNodeValue());
 					}
 					/** memoryMb pendingDeploy deployed */
-					else if( (machine.getNodeName().equalsIgnoreCase("memory") || machine.getNodeName().equalsIgnoreCase(nameSpaceString + "memoryMb"))&& machine.getFirstChild().getNodeValue() != null ) {
+					else if( (machine.getNodeName().equalsIgnoreCase(nameSpaceString + "memory") || machine.getNodeName().equalsIgnoreCase(nameSpaceString + "memoryMb"))&& machine.getFirstChild().getNodeValue() != null ) {
 						server.getTags().put("memory", machine.getFirstChild().getNodeValue());
 					}
 					/** deployedserver osStorageGb */
@@ -1541,14 +1546,8 @@ public class VirtualMachines implements VirtualMachineSupport {
 	
 		if( server.getProviderDataCenterId() == null ) {        	
 			server.setProviderDataCenterId(provider.getDataCenterId(server.getProviderRegionId()));
-		}       
+		}
 
-		if( server.getPlatform() == null && server.getName() != null ) {
-			server.setPlatform(Platform.guess(server.getName()));        	
-		}
-		else {
-			server.setPlatform(Platform.UNKNOWN);
-		}
 		if( server.getArchitecture() == null ) {
 			server.setArchitecture(bestArchitectureGuess);
 		}
@@ -1561,27 +1560,27 @@ public class VirtualMachines implements VirtualMachineSupport {
             int diskInGb = 1;
 
 			if(server.getTag("additionalLocalStorage") == null){
-				product = getProduct(bestArchitectureGuess, cpuCout, memoryInMb, 0);
+				product = getProduct(bestArchitectureGuess, cpuCout, (memoryInMb/1024), 0);
 			}
             else{
 				diskInGb = Integer.valueOf((String) server.getTag("additionalLocalStorage"));
-				product = getProduct(bestArchitectureGuess, cpuCout, memoryInMb, diskInGb); 
+				product = getProduct(bestArchitectureGuess, cpuCout, (memoryInMb/1024), diskInGb);
 			}
             if( product == null ) {
                 product = new VirtualMachineProduct();
-                product.setName(cpuCout + " CPU/" + (memoryInMb/1024) + "MB RAM/" + diskInGb + "GB HD");
-                product.setProviderProductId(cpuCout + ":" + memoryInMb + ":" + diskInGb);
-                product.setRamSize(new Storage<Megabyte>(memoryInMb, Storage.MEGABYTE));
+                product.setName(cpuCout + " CPU/" + (memoryInMb/1024) + "GB RAM/" + diskInGb + "GB HD");
+                product.setProviderProductId(cpuCout + ":" + (memoryInMb/1024) + ":" + diskInGb);
+                product.setRamSize(new Storage<Gigabyte>((memoryInMb/1024), Storage.GIGABYTE));
                 product.setRootVolumeSize(new Storage<Gigabyte>(diskInGb, Storage.GIGABYTE));
                 product.setCpuCount(cpuCout);
-                product.setDescription(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");
+                product.setDescription(cpuCout + " CPU/" + (memoryInMb/1024) + "GB RAM/" + diskInGb + "GB HD");
             }
 		}
         if( product == null ) {
             product = new VirtualMachineProduct();
             product.setName("Unknown");
             product.setProviderProductId("unknown");
-            product.setRamSize(new Storage<Megabyte>(1, Storage.MEGABYTE));
+            product.setRamSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
             product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
             product.setCpuCount(1);
             product.setDescription("Unknown product");
