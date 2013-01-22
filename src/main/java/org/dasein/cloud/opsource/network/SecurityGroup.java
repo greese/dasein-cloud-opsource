@@ -211,44 +211,10 @@ public class SecurityGroup implements FirewallSupport {
         aclRule.appendChild(portRange);
         doc.appendChild(aclRule);
 
-        try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(doc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
-
         OpSourceMethod method = new OpSourceMethod(provider,
                 provider.buildUrl(null,true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
         Document responseDoc = method.invoke();
-
-        try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(responseDoc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
 
         Node item = responseDoc.getDocumentElement();
         String sNS = "";
@@ -458,23 +424,6 @@ public class SecurityGroup implements FirewallSupport {
             sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
         }
         catch(IndexOutOfBoundsException ex){}
-
-        try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(doc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
 
         NodeList matches = doc.getElementsByTagName(sNS + "AclRule");
         if(matches != null){
@@ -807,6 +756,7 @@ public class SecurityGroup implements FirewallSupport {
             	}
             }
         }
+
         if(basicRuleId != null && positionId != null){
         	providerRuleId = basicRuleId+ ":" +positionId;
         }else{
