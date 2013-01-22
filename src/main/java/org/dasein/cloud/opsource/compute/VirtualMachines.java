@@ -171,7 +171,9 @@ public class VirtualMachines implements VirtualMachineSupport {
             if(parts.length >= 2){
                 try{
                     int memory = Integer.parseInt(parts[1]);
-                    if(memory > 0 && memory <= 64){
+                    //TODO: This is temporary - RAM should always be in MB
+                    if(memory < 100) memory = memory * 1024;
+                    if(memory > 0 && memory <= 65536){
                         requestBody += "&memory=" + (memory * 1024);//Required to be in MB
                     }
                     else throw new CloudException("Invalid RAM value. RAM can only go up to 64GB.");
@@ -409,7 +411,7 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Nonnull
     @Override
     public Requirement identifyStaticIPRequirement() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        return Requirement.OPTIONAL;
     }
 
     @Override
@@ -472,6 +474,15 @@ public class VirtualMachines implements VirtualMachineSupport {
             if (productIds.length == 3) {
             	cpuCount = productIds[0];
             	ramSize = productIds[1];
+                try{
+                    //TODO: This is temporary - All ram should be in MB
+                    if(Integer.parseInt(ramSize) < 100){
+                        ramSize = (Integer.parseInt(ramSize) * 1024) + "";
+                    }
+                }
+                catch(NumberFormatException ex){
+                    throw new InternalException("Invalid value specified for RAM in product id string");
+                }
             	volumeSizes = productIds[2];
             }
             else {
@@ -857,7 +868,6 @@ public class VirtualMachines implements VirtualMachineSupport {
 				if( r.getProviderRegionId().equals(regionId)){
 					maxCPUNum = r.getMaxCPUNum();
 					maxMemInMB = r.getMaxMemInMB();
-					maxMemInGB = maxMemInMB/1024;
 				}
 			}
 		}
@@ -1568,19 +1578,19 @@ public class VirtualMachines implements VirtualMachineSupport {
 			}
             if( product == null ) {
                 product = new VirtualMachineProduct();
-                product.setName(cpuCout + " CPU/" + (memoryInMb/1024) + "GB RAM/" + diskInGb + "GB HD");
-                product.setProviderProductId(cpuCout + ":" + (memoryInMb/1024) + ":" + diskInGb);
-                product.setRamSize(new Storage<Gigabyte>((memoryInMb/1024), Storage.GIGABYTE));
+                product.setName(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");
+                product.setProviderProductId(cpuCout + ":" + memoryInMb + ":" + diskInGb);
+                product.setRamSize(new Storage<Megabyte>((memoryInMb), Storage.MEGABYTE));
                 product.setRootVolumeSize(new Storage<Gigabyte>(diskInGb, Storage.GIGABYTE));
                 product.setCpuCount(cpuCout);
-                product.setDescription(cpuCout + " CPU/" + (memoryInMb/1024) + "GB RAM/" + diskInGb + "GB HD");
+                product.setDescription(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");
             }
 		}
         if( product == null ) {
             product = new VirtualMachineProduct();
             product.setName("Unknown");
             product.setProviderProductId("unknown");
-            product.setRamSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
+            product.setRamSize(new Storage<Megabyte>(1024, Storage.MEGABYTE));
             product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
             product.setCpuCount(1);
             product.setDescription("Unknown product");
