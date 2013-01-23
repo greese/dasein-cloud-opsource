@@ -222,12 +222,49 @@ public class SecurityGroup implements FirewallSupport {
         aclRule.appendChild(sourceIpRange);
         aclRule.appendChild(destinationIpRange);
         aclRule.appendChild(portRange);
+        aclRule.appendChild(type);
         doc.appendChild(aclRule);
+
+        System.out.println("Sending this rule:");
+        try{
+            TransformerFactory transfac = TransformerFactory.newInstance();
+            Transformer trans = transfac.newTransformer();
+            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            StringWriter sw = new StringWriter();
+            StreamResult result = new StreamResult(sw);
+            DOMSource source = new DOMSource(doc);
+            trans.transform(source, result);
+            String xmlString = sw.toString();
+            System.out.println(xmlString);
+        }
+        catch(Exception ex){
+            ex.printStackTrace();
+        }
 
         OpSourceMethod method = new OpSourceMethod(provider,
                 provider.buildUrl(null,true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
         Document responseDoc = method.invoke();
+
+        System.out.println("Response:");
+        try{
+            TransformerFactory transfac = TransformerFactory.newInstance();
+            Transformer trans = transfac.newTransformer();
+            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            StringWriter sw = new StringWriter();
+            StreamResult result = new StreamResult(sw);
+            DOMSource source = new DOMSource(responseDoc);
+            trans.transform(source, result);
+            String xmlString = sw.toString();
+            System.out.println(xmlString);
+        }
+        catch(Exception ex){
+            ex.printStackTrace();
+        }
 
         Node item = responseDoc.getDocumentElement();
         String sNS = "";
@@ -240,7 +277,7 @@ public class SecurityGroup implements FirewallSupport {
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
                 if(node.getNodeName().equals(sNS + "id") && node.getFirstChild().getNodeValue() != null ){
-                    System.out.println("Returning this value: " + node.getFirstChild().getNodeValue());
+                    System.out.println("Returning this value: " + node.getFirstChild().getNodeValue() + ":" + positionId);
                     return node.getFirstChild().getNodeValue() + ":" + positionId;
                 }
 
@@ -379,7 +416,7 @@ public class SecurityGroup implements FirewallSupport {
     		boolean isExist = false;
     		for(FirewallRule rule: list){
 
-    			if(position.equals(rule.getPrecedence())){
+                if(position.equals(getFirewallPositionIdFromDaseinRuleId(rule.getProviderRuleId()))){
     				isExist = true;
     				break;
     			}       		
@@ -389,7 +426,14 @@ public class SecurityGroup implements FirewallSupport {
     		}
     	}
     	return null;
-        
+    }
+
+    private String getFirewallPositionIdFromDaseinRuleId(String daseinRuleId){
+        if(daseinRuleId.contains(":")){
+            return daseinRuleId.substring(daseinRuleId.indexOf(":")+1);
+        }else{
+            return null;
+        }
     }
 
     @Override
@@ -806,7 +850,9 @@ public class SecurityGroup implements FirewallSupport {
         if(source == null)source = RuleTarget.getGlobal(firewallId);
         if(destination == null)source = RuleTarget.getGlobal(firewallId);
 
-        FirewallRule rule = FirewallRule.getInstance(providerRuleId + positionId, firewallId, source, direction, protocol, permission, destination, startPort, endPort);
+        System.out.println("Provider Rule ID: " + providerRuleId + ":" + positionId);
+
+        FirewallRule rule = FirewallRule.getInstance(providerRuleId + ":" + positionId, firewallId, source, direction, protocol, permission, destination, startPort, endPort);
         rule = rule.withPrecedence(positionId);
         return rule;
     }
