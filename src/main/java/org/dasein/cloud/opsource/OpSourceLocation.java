@@ -115,7 +115,7 @@ public class OpSourceLocation implements DataCenterServices {
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
     	
 		Document doc = method.invoke();*/
-        Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters);
+        Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
         String sNS = "";
         try{
             sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);

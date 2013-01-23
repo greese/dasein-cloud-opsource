@@ -4,6 +4,7 @@ import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
 
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
@@ -60,12 +61,12 @@ public class CallCache {
         datacenterWithLimitsThreshold = (60*5*1000);
     }
 
-    private Document getRealAPICall(OpSource provider, HashMap<Integer, Param> parameters) throws CloudException, InternalException{
-        OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(null,true, parameters), provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+    private Document getRealAPICall(OpSource provider, HashMap<Integer, Param> parameters, String resource, String regionServiceURL) throws CloudException, InternalException{
+        OpSourceMethod method = new OpSourceMethod(provider, resource.equals(NETWORK_WITH_LOCATION) ? provider.buildUrl(null,true, parameters) : regionServiceURL, provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
         return method.invoke();
     }
 
-    public Document getAPICall(String resource, OpSource provider, HashMap<Integer, Param> parameters) throws CloudException, InternalException{
+    public Document getAPICall(String resource, OpSource provider, HashMap<Integer, Param> parameters, String regionServiceURL) throws CloudException, InternalException{
         boolean timeElapsed = false;
 
         java.util.Date now = new java.util.Date();
@@ -87,7 +88,7 @@ public class CallCache {
             if(wire.isDebugEnabled()){
                 wire.debug("Getting real OpSource data: " + resource);
             }
-            doc = getRealAPICall(provider, parameters);
+            doc = getRealAPICall(provider, parameters, resource, regionServiceURL);
             cachedAPICalls.put(provider.getContext().getAccountNumber() + "-" + provider.getContext().getRegionId() + "-" + resource, doc);
         }
         else{

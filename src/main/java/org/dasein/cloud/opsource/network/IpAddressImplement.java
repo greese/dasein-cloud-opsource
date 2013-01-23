@@ -185,6 +185,11 @@ public class IpAddressImplement implements IpAddressSupport {
         return version.equals(IPVersion.IPV4);
     }
 
+    @Override
+    public boolean isAssignablePostLaunch(@Nonnull IPVersion version) throws CloudException, InternalException{
+        return true;
+    }
+
     public boolean isForwarding() {
         return false;
     }

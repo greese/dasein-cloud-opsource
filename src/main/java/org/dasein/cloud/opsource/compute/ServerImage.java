@@ -162,6 +162,11 @@ public class ServerImage implements MachineImageSupport {
         return null;  //TODO: Implement for 2013.01
     }
 
+    @Override
+    public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls){
+        return null; // TODO: Implement for 2013.02
+    }
+
 
     private Architecture guess(String desc) {
         Architecture arch = Architecture.I64;
@@ -547,6 +552,11 @@ public class ServerImage implements MachineImageSupport {
     	parameters.put(1, param);    
     	OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
     	method.requestResult("Removing image",method.invoke());
+    }
+
+    @Override
+    public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException{
+        //TODO: Implement for 2013.02
     }
 
     @Override

@@ -31,15 +31,7 @@ import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.IPVersion;
-import org.dasein.cloud.network.NICCreateOptions;
-import org.dasein.cloud.network.NetworkInterface;
-import org.dasein.cloud.network.RoutingTable;
-import org.dasein.cloud.network.Subnet;
-import org.dasein.cloud.network.SubnetState;
-import org.dasein.cloud.network.VLANState;
-import org.dasein.cloud.network.VLANSupport;
-import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.network.*;
 import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
@@ -829,6 +821,11 @@ public class Network implements VLANSupport {
     @Override
     public @Nonnull Iterable<RoutingTable> listRoutingTables(@Nonnull String inVlanId) throws CloudException, InternalException {
         return Collections.emptyList();
+    }
+
+    @Override
+    public Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException{
+        return Collections.emptyList();//TODO: Implement for 2013.02
     }
 
     @Override

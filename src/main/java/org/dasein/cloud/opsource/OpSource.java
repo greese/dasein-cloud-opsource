@@ -121,7 +121,7 @@ public class OpSource extends AbstractCloud {
 	final String OpSource_OrgId_Key = "orgId";
 	final String OpSource_VERSION = "/oec/0.9";
 		
-	private String orgId = null;
+	public String orgId = null;
 	public String defaultVlanId = null;
 	private String defaultRegionId = null;
 	private String defaultAdminPasswordForVM = null;
@@ -290,15 +290,15 @@ public class OpSource extends AbstractCloud {
 	
 	//Return the request url for data and region services
 	public String getOrgUrl() throws CloudException, InternalException{
-		String basicUrl = this.getBasicUrl();
-		String orgId = this.getOrgId();
-		
-		if(basicUrl != null && orgId != null ){
-			return basicUrl+ "/" + orgId + "/";
-		}else{
-			throw new CloudException("Wrong endpoint");
-		}	
-	}
+        String basicUrl = this.getBasicUrl();
+        String orgId = this.getOrgId();
+
+        if(basicUrl != null && orgId != null ){
+            return basicUrl+ "/" + orgId + "/";
+        }else{
+            throw new CloudException("Wrong endpoint");
+        }
+    }
 	
 	//Return the request url for data and region services
 	public String getServerImageUrl() throws CloudException, InternalException{
@@ -535,8 +535,8 @@ public class OpSource extends AbstractCloud {
                 
                 try {
             		//Document doc = method.invoke();
-                    HashMap<Integer, Param> parameters = (HashMap)getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null);
-                    Document doc = CallCache.getInstance().getAPICall(LOCATION_BASE_PATH, this, parameters);
+                    //HashMap<Integer, Param> parameters = (HashMap)getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null);
+                    Document doc = CallCache.getInstance().getAPICall(LOCATION_BASE_PATH, this, new HashMap<Integer, Param>(), getRegionServiceUrl());
             		if( logger.isDebugEnabled()) {
             			logger.debug("Found regions: "+ convertDomToString(doc));
             		}

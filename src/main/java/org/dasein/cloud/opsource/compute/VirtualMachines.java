@@ -281,7 +281,7 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Nullable
     @Override
     public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
-        return VMScalingCapabilities.getInstance(false, true);//TODO: Check that this is correct for 2013.01
+        return VMScalingCapabilities.getInstance(false, true, Requirement.OPTIONAL, Requirement.OPTIONAL);//TODO: Check that this is correct for 2013.02
     }
 
     @Override
@@ -395,6 +395,11 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Requirement identifyPasswordRequirement() throws CloudException, InternalException {
+        return identifyPasswordRequirement(Platform.UNKNOWN);
+    }
+
+    @Override
+    public @Nonnull Requirement identifyPasswordRequirement(Platform platform) throws CloudException, InternalException{
         return Requirement.REQUIRED;
     }
 
@@ -405,6 +410,11 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Requirement identifyShellKeyRequirement() throws CloudException, InternalException {
+        return identifyShellKeyRequirement(Platform.UNKNOWN);
+    }
+
+    @Override
+    public @Nonnull Requirement identifyShellKeyRequirement(Platform platform) throws CloudException, InternalException{
         return Requirement.NONE;
     }
 
@@ -852,7 +862,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 				provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
 
 		Document doc = method.invoke();*/
-        Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters);
+        Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
         String sNS = "";
         try{
             sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
