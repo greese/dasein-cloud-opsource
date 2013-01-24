@@ -219,8 +219,8 @@ public class SecurityGroup implements FirewallSupport {
         aclRule.appendChild(actionElmt);
         aclRule.appendChild(protocolElmt);
         //aclRule.appendChild(protocolElmt);
-        aclRule.appendChild(sourceIpRange);
-        aclRule.appendChild(destinationIpRange);
+        if(!sourceIp.equals("0.0.0.0") && !sourceRuleTarget.getRuleTargetType().equals(RuleTargetType.GLOBAL)) aclRule.appendChild(sourceIpRange);
+        if(!destinationIp.equals("0.0.0.0") && !destinationRuleTarget.getRuleTargetType().equals(RuleTargetType.GLOBAL))aclRule.appendChild(destinationIpRange);
         aclRule.appendChild(portRange);
         aclRule.appendChild(type);
         doc.appendChild(aclRule);
@@ -848,7 +848,7 @@ public class SecurityGroup implements FirewallSupport {
             return null;
         }
         if(source == null)source = RuleTarget.getGlobal(firewallId);
-        if(destination == null)source = RuleTarget.getGlobal(firewallId);
+        if(destination == null)destination = RuleTarget.getGlobal(firewallId);
 
         System.out.println("Provider Rule ID: " + providerRuleId + ":" + positionId);
 
