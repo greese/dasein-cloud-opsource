@@ -174,7 +174,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                     //TODO: This is temporary - RAM should always be in MB
                     if(memory < 100) memory = memory * 1024;
                     if(memory > 0 && memory <= 65536){
-                        requestBody += "&memory=" + (memory * 1024);//Required to be in MB
+                        requestBody += "&memory=" + (memory);//Required to be in MB
                     }
                     else throw new CloudException("Invalid RAM value. RAM can only go up to 64GB.");
                 }
