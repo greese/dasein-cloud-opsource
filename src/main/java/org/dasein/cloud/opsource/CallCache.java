@@ -62,7 +62,7 @@ public class CallCache {
     }
 
     private Document getRealAPICall(OpSource provider, HashMap<Integer, Param> parameters, String resource, String regionServiceURL) throws CloudException, InternalException{
-        OpSourceMethod method = new OpSourceMethod(provider, resource.equals(NETWORK_WITH_LOCATION) ? provider.buildUrl(null,true, parameters) : regionServiceURL, provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        OpSourceMethod method = new OpSourceMethod(provider, (resource.equals(NETWORK_WITH_LOCATION) || regionServiceURL.equals("")) ? provider.buildUrl(null,true, parameters) : regionServiceURL, provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
         return method.invoke();
     }
 
