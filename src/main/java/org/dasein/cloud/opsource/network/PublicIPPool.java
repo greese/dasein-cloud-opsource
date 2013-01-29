@@ -165,6 +165,77 @@ public class PublicIPPool {
         return ipBlocks;
     }
 
+    public PublicIPBlock getPublicIpBlock(String providerVlanId, String publicIpBlockId) throws CloudException, InternalException{
+        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+
+        Param param = new Param("network", null);
+        parameters.put(0, param);
+
+        param = new Param(providerVlanId, null);
+        parameters.put(1, param);
+
+        param = new Param("config", null);
+        parameters.put(2, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null,true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+
+        Document doc = method.invoke();
+        String sNS = "";
+        try{
+            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+        }
+        catch(IndexOutOfBoundsException ex){}
+        NodeList matches = doc.getElementsByTagName(sNS + "publicIps");
+
+        boolean requiredBlock = false;
+        if(matches != null){
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node item = matches.item(i);
+                if(item.getNodeType() == Node.TEXT_NODE) continue;
+                NodeList blocks = item.getChildNodes();
+                for(int j = 0;j <blocks.getLength(); j++ ){
+                    Node node = blocks.item(j);
+                    if(node.getNodeType() == Node.TEXT_NODE) continue;
+                    else if(node.getNodeName().equals(sNS + "IpBlock")){
+                        String currentId = "";
+                        String currentBaseIp = "";
+                        int currentBlockSize = 0;
+
+                        NodeList currentBlock = node.getChildNodes();
+                        for(int k=0;k<currentBlock.getLength();k++){
+                            Node blockInfo = currentBlock.item(k);
+                            if(blockInfo.getNodeType() == Node.TEXT_NODE)continue;
+                            else if(blockInfo.getNodeName().equals(sNS + "id")){
+                                if(publicIpBlockId.equals(blockInfo.getFirstChild().getNodeValue())){
+                                    requiredBlock = true;
+                                    currentId = blockInfo.getFirstChild().getNodeValue();
+                                }
+                                else{
+                                    requiredBlock = false;
+                                    continue;
+                                }
+                            }
+                            else if(blockInfo.getNodeName().equals(sNS + "baseIp") && requiredBlock){
+                                currentBaseIp = blockInfo.getFirstChild().getNodeValue();
+                            }
+                            else if(blockInfo.getNodeName().equals(sNS + "subnetSize") && requiredBlock){
+                                currentBlockSize = Integer.parseInt(blockInfo.getFirstChild().getNodeValue());
+                            }
+                        }
+                        if(requiredBlock){
+                            ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
+                            PublicIPBlock block = new PublicIPBlock(currentId, ips);
+                            return block;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public ArrayList<IpAddress> getIPs(String currentBaseIp, int currentBlockSize){
         String firstPart = currentBaseIp.substring(0, currentBaseIp.lastIndexOf(".")+1);
         int lastPart = Integer.parseInt(currentBaseIp.substring(currentBaseIp.lastIndexOf(".")+1));
