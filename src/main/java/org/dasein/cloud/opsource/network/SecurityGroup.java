@@ -568,6 +568,40 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
+    public void revoke(@Nonnull String firewallRuleId) throws InternalException, CloudException {
+        String firewallId = "";
+        ArrayList<Firewall> firewalls = (ArrayList<Firewall>)list();
+        for(Firewall firewall : firewalls){
+            ArrayList<FirewallRule> rules = (ArrayList<FirewallRule>)getRules(firewall.getProviderFirewallId());
+            for(FirewallRule rule : rules){
+                if(rule.getProviderRuleId().equals(firewallRuleId)){
+                    firewallId = rule.getFirewallId();
+                    break;
+                }
+            }
+        }
+
+        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+        parameters.put(0, param);
+
+        param = new Param(firewallId, null);
+        parameters.put(1, param);
+
+        param = new Param("aclrule", null);
+        parameters.put(2, param);
+
+        if(firewallRuleId.indexOf(":") > 0)firewallRuleId = firewallRuleId.substring(0, firewallRuleId.indexOf(":"));
+        param = new Param(firewallRuleId, null);
+        parameters.put(3, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl("delete",true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+        method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
+    }
+
+    @Override
     public void revoke(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
         revoke(firewallId, Direction.INGRESS, cidr, protocol, beginPort, endPort);
     }
@@ -611,6 +645,7 @@ public class SecurityGroup implements FirewallSupport {
         parameters.put(2, param);
 
         String ruleId = rule.getProviderRuleId();
+        if(ruleId.indexOf(":") > 0)ruleId = ruleId.substring(0, ruleId.indexOf(":"));
         param = new Param(ruleId, null);
         parameters.put(3, param);
 
@@ -618,31 +653,6 @@ public class SecurityGroup implements FirewallSupport {
                 provider.buildUrl("delete",true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
         method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallRuleId) throws InternalException, CloudException {
-        //TODO: Implement for 2013.01 - Need to get firewallId from rule
-        /*
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-        parameters.put(0, param);
-
-        param = new Param(firewallId, null);
-        parameters.put(1, param);
-
-        param = new Param("aclrule", null);
-        parameters.put(2, param);
-
-        String ruleId = rule.getProviderRuleId();
-        param = new Param(ruleId, null);
-        parameters.put(3, param);
-
-        OpSourceMethod method = new OpSourceMethod(provider,
-                provider.buildUrl("delete",true, parameters),
-                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-        method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
-        */
     }
 
     @Override
@@ -657,12 +667,12 @@ public class SecurityGroup implements FirewallSupport {
 
     @Override
     public boolean supportsRules(@Nonnull Direction direction, @Nonnull Permission permission, boolean inVlan) throws CloudException, InternalException{
-        return false;  //TODO: Implement for 2013.01
+        return true;
     }
 
     @Override
     public boolean supportsFirewallSources() throws CloudException, InternalException {
-        return false;  //TODO: Implement for 2013.01
+        return true;
     }
 
     private Firewall toFirewall(Node node) {
