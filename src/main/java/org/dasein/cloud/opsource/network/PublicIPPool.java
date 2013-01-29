@@ -156,7 +156,7 @@ public class PublicIPPool {
                             }
                         }
                         ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
-                        PublicIPBlock block = new PublicIPBlock(currentId, ips);
+                        PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips);
                         ipBlocks.add(block);
                     }
                 }
@@ -226,7 +226,7 @@ public class PublicIPPool {
                         }
                         if(requiredBlock){
                             ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
-                            PublicIPBlock block = new PublicIPBlock(currentId, ips);
+                            PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips);
                             return block;
                         }
                     }
@@ -418,15 +418,21 @@ public class PublicIPPool {
 
     public class PublicIPBlock{
         String id;
+        String vlanId;
         ArrayList<IpAddress> addresses;
 
-        PublicIPBlock(String id, ArrayList<IpAddress> addresses){
+        PublicIPBlock(String id, String vlanId, ArrayList<IpAddress> addresses){
             this.id = id;
+            this.vlanId = vlanId;
             this.addresses = addresses;
         }
 
         public String getId(){
             return id;
+        }
+
+        public String getVlanId(){
+            return vlanId;
         }
 
         public ArrayList<IpAddress> getAddresses(){
