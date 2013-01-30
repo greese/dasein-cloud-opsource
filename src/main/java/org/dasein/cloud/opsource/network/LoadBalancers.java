@@ -41,6 +41,7 @@ import org.dasein.cloud.network.LbListener;
 import org.dasein.cloud.network.LbProtocol;
 import org.dasein.cloud.network.LoadBalancer;
 import org.dasein.cloud.network.LoadBalancerAddressType;
+import org.dasein.cloud.network.LoadBalancerServer;
 import org.dasein.cloud.network.LoadBalancerSupport;
 import org.dasein.cloud.network.VLAN;
 import org.dasein.cloud.opsource.OpSource;
@@ -875,7 +876,17 @@ serverFarm/{server-farm-id}
 		return null;
 	}
 
-	public LoadBalancer getLoadBalancer(String networkId, String loadBalancerId) throws CloudException, InternalException {
+    @Override
+    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId) throws CloudException, InternalException {
+        return Collections.emptyList(); // todo: implement me
+    }
+
+    @Override
+    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId, String... serverIdsToCheck) throws CloudException, InternalException {
+        return Collections.emptyList(); //todo implement me
+    }
+
+    public LoadBalancer getLoadBalancer(String networkId, String loadBalancerId) throws CloudException, InternalException {
 		ArrayList<LoadBalancer> list = (ArrayList<LoadBalancer>) listLoadBalancers(networkId);
 		if(list == null){
 			return null;

@@ -18,12 +18,10 @@
 
 package org.dasein.cloud.opsource.compute;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.TreeSet;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -40,7 +38,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class ServerImage implements MachineImageSupport {
+public class ServerImage extends AbstractImageSupport {
     static private final Logger logger = OpSource.getLogger(ServerImage.class);
 
 	static private final String DEPLOYED_PATH = "deployed";
@@ -58,6 +56,7 @@ public class ServerImage implements MachineImageSupport {
     private OpSource provider;
     
     public ServerImage(OpSource provider) {
+        super(provider);
         this.provider = provider;
     }
     
@@ -84,89 +83,39 @@ public class ServerImage implements MachineImageSupport {
         return null;    	
     }
 
-    @Override
-    public void addImageShare(@Nonnull String s, @Nonnull String s2) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void addPublicShare(@Nonnull String s) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public String bundleVirtualMachine(@Nonnull String s, @Nonnull MachineImageFormat machineImageFormat, @Nonnull String s2, @Nonnull String s3) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void bundleVirtualMachineAsync(@Nonnull String s, @Nonnull MachineImageFormat machineImageFormat, @Nonnull String s2, @Nonnull String s3, @Nonnull AsynchronousTask<String> stringAsynchronousTask) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public MachineImage captureImage(@Nonnull ImageCreateOptions imageCreateOptions) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void captureImageAsync(@Nonnull ImageCreateOptions imageCreateOptions, @Nonnull AsynchronousTask<MachineImage> machineImageAsynchronousTask) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
     @Nullable
     @Override
-    public MachineImage getImage(@Nonnull String s) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
+    public MachineImage getImage(@Nonnull String imageId) throws CloudException, InternalException {
+        //First check the pending images, because it is mostly being checked by customers
+        ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
+        for(MachineImage image : list){
+            if(image.getProviderMachineImageId().equals(imageId)){
+                return image;
+            }
+        }
 
-    @Override
-    @Deprecated
-    public MachineImage getMachineImage(String imageId) throws InternalException, CloudException {
-    	//First check the pending images, because it is mostly being checked by customers
-    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
-    	for(MachineImage image : list){
-    		if(image.getProviderMachineImageId().equals(imageId)){
-    			return image;
-    		}    		
-    	}
-    	
-    	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
-    	for(MachineImage image : list){
-    		if(image.getProviderMachineImageId().equals(imageId)){
-    			return image;
-    		}    		
-    	}
-    	
-    	list = (ArrayList<MachineImage>) listOpSourceMachineImages();
-    	for(MachineImage image : list){
-    		if(image.getProviderMachineImageId().equals(imageId)){
-    			return image;
-    		}    		
-    	}    	
+        list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
+        for(MachineImage image : list){
+            if(image.getProviderMachineImageId().equals(imageId)){
+                return image;
+            }
+        }
+
+        list = (ArrayList<MachineImage>) listOpSourceMachineImages();
+        for(MachineImage image : list){
+            if(image.getProviderMachineImageId().equals(imageId)){
+                return image;
+            }
+        }
 
         return null;
-    }
-    
-    @Override
-    @Deprecated
-    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale) {
-        return "Server Image";
     }
 
     @Nonnull
     @Override
     public String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass imageClass) {
-        return null;  //TODO: Implement for 2013.01
+        return "Server Image";  //TODO: Implement for 2013.01
     }
-
-    @Override
-    public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls){
-        return null; // TODO: Implement for 2013.02
-    }
-
 
     private Architecture guess(String desc) {
         Architecture arch = Architecture.I64;
@@ -217,47 +166,19 @@ public class ServerImage implements MachineImageSupport {
         }
         image.setSoftware(software.toString());
     }
-    
-    @Override
-    @Deprecated
-    public boolean hasPublicLibrary() {
-        return true;
-    }
-
-    @Nonnull
-    @Override
-    public Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
 
     @Override
-    @Deprecated
-    public AsynchronousTask<String> imageVirtualMachine(String vmId, String name, String description) throws CloudException, InternalException {
-      
-        final AsynchronousTask<String> task = new AsynchronousTask<String>();
-        final String fname = name;
-        final String fdesc = description;
-        final String fvmId = vmId;
-        
-        Thread t = new Thread() {
-            public void run() {
-                try {
-                    MachineImage image = imageVirtualMachine(fvmId, fname, fdesc, task);
-                
-                    task.completeWithResult(image.getProviderMachineImageId());
-                }
-                catch( Throwable t ) {
-                    task.complete(t);
-                }
-            }
-        };
+    protected @Nonnull MachineImage capture(@Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> task) throws CloudException, InternalException {
+        String vmId = options.getVirtualMachineId();
 
-        t.start();
-        return task;
-    }
-    
-    private MachineImage imageVirtualMachine(String vmId, String name, String description, AsynchronousTask<String> task) throws CloudException, InternalException {
+        if( vmId == null ) {
+            throw new CloudException("No VM ID was specified");
+        }
+        @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
 
+        if( vm != null ) {
+            throw new CloudException("No such virtual machine: " + vmId);
+        }
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.SERVER_BASE_PATH, null);
     	parameters.put(0, param);
@@ -265,11 +186,11 @@ public class ServerImage implements MachineImageSupport {
         param = new Param(vmId, null);
     	parameters.put(1, param);
     	
-        param = new Param(CREATE_IMAGE, name);
+        param = new Param(CREATE_IMAGE, options.getName());
     	parameters.put(2, param);
     	
     	// Can not use space in the url
-        param = new Param("desc", description.replace(" ", "_"));
+        param = new Param("desc", options.getDescription().replace(" ", "_"));
       	parameters.put(3, param);
     
     	OpSourceMethod method = new OpSourceMethod(provider,    			
@@ -280,23 +201,23 @@ public class ServerImage implements MachineImageSupport {
     	   	//First check the pending images, because it is mostly being checked by customers
         	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
         	for(MachineImage image : list){
-        		if(image.getName().equals(name)){
+        		if(image.getName().equals(options.getName())){
         			return image;
         		}    		
         	}
         	//Check deployed Image
         	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
         	for(MachineImage image : list){
-        		if(image.getName().equals(name)){
+        		if(image.getName().equals(options.getName())){
         			return image;
         		}    		
         	}    		
     	}
-    	return null; 
+        throw new CloudException("No image, no error");
     }
     
     @Override
-    public boolean isImageSharedWithPublic(String templateId) throws CloudException, InternalException {
+    public boolean isImageSharedWithPublic(@Nonnull String templateId) throws CloudException, InternalException {
 
         return false;
     }
@@ -311,41 +232,38 @@ public class ServerImage implements MachineImageSupport {
 
     @Nonnull
     @Override
-    public Iterable<ResourceStatus> listImageStatus(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+    public Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
+        if( options == null || options.getAccountNumber() == null ) {
+            ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
+
+            ArrayList<MachineImage> list =  (ArrayList<MachineImage>) listCustomerMachineImages();
+            if(list != null){
+                allList.addAll(list);
+            }
+            /** Only list the private image */
+
+            /**
+             list = (ArrayList<MachineImage>) listOpSourceMachineImages();
+             if(list != null){
+             allList.addAll(list);
+             }*/
+
+            return allList;
+        }
+        else {
+            String account = options.getAccountNumber();
+            ProviderContext ctx = getProvider().getContext();
+
+            if( ctx == null ) {
+                throw new CloudException("No context was set for this request");
+            }
+            if( account == null || account.equals(ctx.getAccountNumber()) ) {
+                return listCustomerMachineImages();
+            }
+            return listOpSourceMachineImages();
+        }
     }
 
-    @Nonnull
-    @Override
-    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String s) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    @Deprecated
-    public Iterable<MachineImage> listMachineImages() throws InternalException, CloudException {
-    	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
- 
-    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachineImages();
-    	if(list != null){
-    		allList.addAll(list);
-    	}
-    	/** Only list the private image */
-    	
-    	/**    	
- 		list = (ArrayList<MachineImage>) listOpSourceMachineImages();
-    	if(list != null){
-    		allList.addAll(list);
-    	}*/
-    	
-        return allList;
-    }
     private Iterable<MachineImage> listCustomerMachineImages() throws InternalException, CloudException {
     	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
     	
@@ -485,40 +403,18 @@ public class ServerImage implements MachineImageSupport {
   
         return list;
     }
-    
-    @Override
-    @Deprecated
-    public Iterable<MachineImage> listMachineImagesOwnedBy(String accountId) throws CloudException, InternalException {
-    	/** Only two types of owner OpSource, or customer itself */
-        /** If no account specified, return all images */
-        if (provider.getContext().getAccountNumber().equals(accountId)){
-        	return listCustomerMachineImages();
-        }else{
-        	return listOpSourceMachineImages();
-        }
-    }
-    
-    @Override
-    public Iterable<String> listShares(String templateId) throws CloudException, InternalException {
-    	return new TreeSet<String>();     
-    }
+
 
     @Nonnull
     @Override
     public Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        return Collections.singletonList(ImageClass.MACHINE);
     }
 
     @Nonnull
     @Override
     public Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public MachineImage registerImageBundle(@Nonnull ImageCreateOptions imageCreateOptions) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        return Collections.singletonList(MachineImageType.VOLUME);
     }
 
     @Override
@@ -531,47 +427,20 @@ public class ServerImage implements MachineImageSupport {
         return list;
     }
 
-    @Nonnull
-    @Override
-    public Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
     @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
     }
-    
-    @Override
-    public void remove(String imageId) throws InternalException, CloudException {
-    	
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
-    	parameters.put(0, param);
-    	param = new Param(imageId, null);
-    	parameters.put(1, param);    
-    	OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-    	method.requestResult("Removing image",method.invoke());
-    }
 
     @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException{
-        //TODO: Implement for 2013.02
-    }
-
-    @Override
-    public void removeAllImageShares(@Nonnull String s) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void removeImageShare(@Nonnull String s, @Nonnull String s2) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void removePublicShare(@Nonnull String s) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
+        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
+        parameters.put(0, param);
+        param = new Param(providerImageId, null);
+        parameters.put(1, param);
+        OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        method.requestResult("Removing image",method.invoke());
     }
 
     public MachineImage searchImage(Platform platform, Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
@@ -604,53 +473,19 @@ public class ServerImage implements MachineImageSupport {
     
     @Override
     @Deprecated
-    public Iterable<MachineImage> searchMachineImages(String keyword, Platform platform, Architecture architecture) throws InternalException, CloudException {
-    	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
-    	
-    	/**Search only OpSource public image, not include owner's images */
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages();
-     
-        for( MachineImage img: images) {        	
-            
-            if( img != null ) {
-                if( architecture != null && !architecture.equals(img.getArchitecture()) ) {
-                    continue;
+    public @Nonnull Iterable<MachineImage> searchMachineImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture) throws InternalException, CloudException {
+        return searchImages(null, keyword, platform, architecture, ImageClass.MACHINE);
+    }
+
+    @Override
+    public @Nonnull Iterable<MachineImage> searchImages(@Nullable String account, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
+        ArrayList<MachineImage> list = new ArrayList<MachineImage>();
+
+        for( MachineImage img: listCustomerMachineImages() ) {
+            if( matches(img, keyword, platform, architecture, imageClasses) ) {
+                if( account == null || account.equals(img.getProviderOwnerId()) ) {
+                    list.add(img);
                 }
-                if( platform != null && !platform.equals(Platform.UNKNOWN) ) {
-                    Platform mine = img.getPlatform();
-                    
-                    if( platform.isWindows() && !mine.isWindows() ) {
-                        continue;
-                    }
-                    if( platform.isUnix() && !mine.isUnix() ) {
-                        continue;
-                    }
-                    if( platform.isBsd() && !mine.isBsd() ) {
-                        continue;
-                    }
-                    if( platform.isLinux() && !mine.isLinux() ) {
-                        continue;
-                    }
-                    if( platform.equals(Platform.UNIX) ) {
-                        if( !mine.isUnix() ) {
-                            continue;
-                        }
-                    }
-                    else if( !platform.equals(mine) ) {
-                        continue;
-                    }
-                }
-                if( keyword != null && !keyword.equals("") ) {
-                    keyword = keyword.toLowerCase();
-                    if( !img.getProviderMachineImageId().toLowerCase().contains(keyword) ) {
-                        if( !img.getName().toLowerCase().contains(keyword) ) {
-                            if( !img.getDescription().toLowerCase().contains(keyword) ) {
-                                continue;
-                            }
-                        }
-                    }
-                }               
-                list.add(img);
             }
         }
         return list;
@@ -658,21 +493,17 @@ public class ServerImage implements MachineImageSupport {
 
     @Nonnull
     @Override
-    public Iterable<MachineImage> searchImages(@Nullable String s, @Nullable String s2, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+    public Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
+        ArrayList<MachineImage> list = new ArrayList<MachineImage>();
+
+        for( MachineImage img: listOpSourceMachineImages() ) {
+            if( matches(img, keyword, platform, architecture, imageClasses) ) {
+                list.add(img);
+            }
+        }
+        return list;
     }
 
-    @Nonnull
-    @Override
-    public Iterable<MachineImage> searchPublicImages(@Nullable String s, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    @Deprecated
-    public void shareMachineImage(String templateId, String withAccountId, boolean allow) throws CloudException, InternalException {
-    	  throw new OperationNotSupportedException("OpSource does not support share image.");
-    }
 
     @Override
     @Deprecated
@@ -702,14 +533,8 @@ public class ServerImage implements MachineImageSupport {
 
     @Override
     public boolean supportsPublicLibrary(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
-        return false;  //TODO: Implement for 2013.01
+        return imageClass.equals(ImageClass.MACHINE);
     }
-
-    @Override
-    public void updateTags(@Nonnull String s, @Nonnull Tag... tags) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
 
     private MachineImage toImage(Node node, boolean isCustomerDeployed, boolean isPending, String nameSpace) throws CloudException, InternalException {
         Architecture bestArchitectureGuess = Architecture.I64;

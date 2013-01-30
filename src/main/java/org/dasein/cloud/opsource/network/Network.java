@@ -41,7 +41,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class Network implements VLANSupport {
+public class Network extends AbstractVLANSupport {
 
     static public final Logger logger = Logger.getLogger(VLANSupport.class);
 
@@ -676,9 +676,10 @@ public class Network implements VLANSupport {
     }
 
     @Override
-    public Subnet createSubnet(String cidr, String inProviderVlanId, String name, String description) throws CloudException, InternalException {
-       return createSubnet(inProviderVlanId);
+    public Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
+       return createSubnet(options.getProviderVlanId());
     }
+
     public Subnet createSubnet(String inProviderVlanId) throws CloudException, InternalException {
     	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
