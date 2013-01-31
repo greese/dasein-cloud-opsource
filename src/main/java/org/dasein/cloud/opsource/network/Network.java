@@ -51,7 +51,10 @@ public class Network extends AbstractVLANSupport {
     
     private OpSource provider;
     
-    Network(OpSource provider) { this.provider = provider; }
+    Network(OpSource provider) {
+        super(provider);
+        this.provider = provider;
+    }
 
     @Override
     public boolean allowsNewSubnetCreation() throws CloudException, InternalException {

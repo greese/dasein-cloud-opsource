@@ -20,7 +20,6 @@ package org.dasein.cloud.opsource.compute;
 
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -41,12 +40,13 @@ import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Storage;
 
 
-public class Volumes implements VolumeSupport {
+public class Volumes extends AbstractVolumeSupport {
     //static private final Logger logger = Logger.getLogger(Volumes.class);
   
     private OpSource provider;
     
     Volumes(OpSource provider) {
+        super(provider);
         this.provider = provider;
     }
     
@@ -70,38 +70,24 @@ public class Volumes implements VolumeSupport {
      			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", null));
        	method.requestResult("Attaching disk",method.invoke());
     }
-
-
-    @Override
-    @Deprecated
-    public @Nonnull String create(@Nonnull String snapshotId, int size, @Nonnull String zoneId) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Creating volumes is not supported");
-    }
-
     @Override
     public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
         throw new OperationNotSupportedException("Creating volumes is not supported");
     }
 
     @Override
-    public void detach(@Nonnull String volumeId) throws InternalException, CloudException {
-    	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-     	parameters.put(0, param);
-     	//param = new Param(serverId, null);
-     	//parameters.put(1, param);   
-    	param = new Param("amount", String.valueOf(10));
-     	parameters.put(2, param); 
-     	
-     	OpSourceMethod method = new OpSourceMethod(provider, 
-     			provider.buildUrl(null,true, parameters),
-     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-       	method.requestResult("Attaching disk",method.invoke());
-    }
-
-    @Override
     public void detach(@Nonnull String s, boolean b) throws InternalException, CloudException {
-        //TODO: Implement for 2013.01
+        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+        parameters.put(0, param);
+        //param = new Param(serverId, null);
+        //parameters.put(1, param);
+        param = new Param("amount", String.valueOf(10));
+        parameters.put(2, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null,true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
     }
 
     @Override
@@ -207,12 +193,7 @@ public class Volumes implements VolumeSupport {
     public @Nonnull Iterable<Volume> listVolumes() throws InternalException, CloudException {
         return Collections.emptyList();
     }
-     
-    private Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
-        return Collections.emptyList();
-    }
 
- 
     @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
