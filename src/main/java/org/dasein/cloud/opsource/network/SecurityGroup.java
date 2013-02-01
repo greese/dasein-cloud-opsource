@@ -336,26 +336,14 @@ public class SecurityGroup extends AbstractFirewallSupport {
     }
 
     @Override
-    public String create(String name, String description) throws InternalException, CloudException {
-    	/** Does not support create Firewall */
-    	throw new CloudException("No Op");
-    }
-
-    @Override
-    public String createInVLAN(String name, String description, String providerVlanId) throws InternalException, CloudException {
-    	/** Does not support create Firewall */
-    	throw new CloudException("No Op");
-    }
-    
-    @Override
     public void delete(String firewallId) throws InternalException, CloudException {
     	/** Does not support delete Firewall */
-    	throw new CloudException("No Op");
+        throw new OperationNotSupportedException("Cannot delete firewalls in " + getProvider().getCloudName());
     }
 
     /** Equal to network(VLAN) */
     @Override
-    public Firewall getFirewall(String firewallId) throws InternalException, CloudException {
+    public Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
      	//Firewall id is the same as network id
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
