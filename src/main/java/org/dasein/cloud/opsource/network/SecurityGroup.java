@@ -56,7 +56,7 @@ import javax.xml.transform.stream.StreamResult;
  * But list and get firewall would be list and get network.
  *
  */
-public class SecurityGroup implements FirewallSupport {
+public class SecurityGroup extends AbstractFirewallSupport {
     static private final Logger logger = Logger.getLogger(SecurityGroup.class);
     
     static public final String AUTHORIZE_SECURITY_GROUP_INGRESS = "authorizeSecurityGroupIngress";
@@ -67,34 +67,9 @@ public class SecurityGroup implements FirewallSupport {
     
     private OpSource provider;
     
-    SecurityGroup(OpSource provider) { this.provider = provider; }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String securityGroupId, @Nonnull String cidr, @Nonnull Protocol protocol, int startPort, int endPort) throws CloudException, InternalException {
-        return authorize(securityGroupId, Direction.INGRESS, cidr, protocol, startPort, endPort);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        return authorize(firewallId, direction, Permission.ALLOW, cidr, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        return authorize(firewallId, direction, permission, cidr, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, @Nonnull RuleTarget destination, int beginPort, int endPort) throws CloudException, InternalException {
-        String positionId = getFirstAvaiablePositionForInsertRule(firewallId);
-        int precedence = -1;
-        try{
-            precedence = Integer.parseInt(positionId);
-        }
-        catch(NumberFormatException ex){
-            throw new CloudException("Cannot find available position to add rule");
-        }
-        return authorize(firewallId, direction, permission, RuleTarget.getCIDR(cidr), protocol, destination, beginPort, endPort, precedence);
+    SecurityGroup(OpSource provider) {
+        super(provider);
+        this.provider = provider;
     }
 
     @Nonnull
@@ -663,6 +638,11 @@ public class SecurityGroup implements FirewallSupport {
     @Override
     public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
         //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public boolean supportsFirewallCreation(boolean inVlan) {
+        return false;
     }
 
     @Override
