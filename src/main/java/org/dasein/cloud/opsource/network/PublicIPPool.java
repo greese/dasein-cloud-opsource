@@ -291,15 +291,12 @@ public class PublicIPPool {
             }
             catch(IndexOutOfBoundsException ex){}
 
-            NodeList natRule = doc.getElementsByTagName(sNS + "NatRule");
-            if(natRule != null){
-                for(int i = 0; i< natRule.getLength();i++){
-                    Node node = natRule.item(i);
-                    NatRule rule = toNatRule(node, sNS);
-                    if(rule != null){
-                        rule.setVmId(vm.getProviderVirtualMachineId());
-                        return rule.getNatIp();
-                    }
+            NodeList attributes = responseDoc.getDocumentElement().getChildNodes();
+            for(int i=0;i<attributes.getLength();i++){
+                Node node = attributes.item(i);
+                if(node.getNodeType() == Node.TEXT_NODE)continue;
+                else if(node.getNodeName().equalsIgnoreCase(sNS + "natIp")){
+                    return node.getFirstChild().getNodeValue().trim();
                 }
             }
         }
@@ -397,6 +394,7 @@ public class PublicIPPool {
             else {
                 continue;
             }
+
             if( name.equalsIgnoreCase(nameSpace + "id") ) {
                 rule.setId(value);
             }
