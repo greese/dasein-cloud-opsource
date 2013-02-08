@@ -90,6 +90,7 @@ public class OpSource extends AbstractCloud {
 	/** Request URL path */
 	static public final String IMAGE_BASE_PATH             		= "image";
 	static public final String SERVER_BASE_PATH             	= "server";
+    static public final String SERVER_WITH_STATE                = "serverWithState";
 	static public final String NETWORK_BASE_PATH            	= "network";
 	static public final String LOCATION_BASE_PATH             	= "datacenterWithLimits";
 	/** Response Tag */
