@@ -75,16 +75,19 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
+    @Deprecated
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
         return authorize(firewallId, direction, Permission.ALLOW, cidr, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
     }
 
     @Override
+    @Deprecated
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
         return authorize(firewallId, direction, permission, cidr, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
     }
 
     @Override
+    @Deprecated
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, @Nonnull RuleTarget destination, int beginPort, int endPort) throws CloudException, InternalException {
         String positionId = getFirstAvaiablePositionForInsertRule(firewallId);
         int precedence = -1;
@@ -118,8 +121,8 @@ public class SecurityGroup implements FirewallSupport {
         else nameElmt.setTextContent(destinationRuleTarget.getCidr());
 
         Element positionElmt = doc.createElement("position");
-
-        String positionId = getFirstAvaiablePositionForInsertRule(firewallId);
+        String positionId = precedence + "";
+        if(positionId.equals("-1"))positionId = getFirstAvaiablePositionForInsertRule(firewallId);
         if(positionId == null){
             throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
         }else{
@@ -209,7 +212,6 @@ public class SecurityGroup implements FirewallSupport {
             portRangeType.setTextContent("ALL");
             portRange.appendChild(portRangeType);
         }
-
 
         Element type = doc.createElement("type");
         type.setTextContent(direction.equals(Direction.INGRESS) ? "OUTSIDE_ACL" : "INSIDE_ACL");

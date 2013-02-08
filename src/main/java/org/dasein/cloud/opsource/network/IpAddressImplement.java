@@ -176,6 +176,8 @@ public class IpAddressImplement implements IpAddressSupport {
         return null;
     }
 
+    @Override
+    @Deprecated
     public boolean isAssigned(AddressType type) {
         return type.equals(AddressType.PUBLIC);
     }
@@ -190,6 +192,8 @@ public class IpAddressImplement implements IpAddressSupport {
         return true;
     }
 
+    @Override
+    @Deprecated
     public boolean isForwarding() {
         return false;
     }
@@ -199,6 +203,8 @@ public class IpAddressImplement implements IpAddressSupport {
         return false;
     }
 
+    @Override
+    @Deprecated
     public boolean isRequestable(AddressType type) {
     	return type.equals(AddressType.PUBLIC);
     }
@@ -216,7 +222,9 @@ public class IpAddressImplement implements IpAddressSupport {
      * https://<Cloud API URL>/oec/0.9/{org-id}/networkWithLocation/{networkid}/
 config
      */
-    
+
+    @Override
+    @Deprecated
     public Iterable<org.dasein.cloud.network.IpAddress> listPrivateIpPool(boolean unassignedOnly) throws InternalException, CloudException {
     	return Collections.emptyList();
     	//As the private IP can not be assigned to a specific server, no need to list
@@ -493,7 +501,9 @@ config
      * Opsource does not support reserve one IP address
      * But it supports to create a subnet of ip addresses
      */
-    
+
+    @Override
+    @Deprecated
     public @Nonnull String request(@Nonnull AddressType addressType) throws InternalException, CloudException {
     	
     	if(addressType.equals(AddressType.PRIVATE)){    		
