@@ -29,7 +29,6 @@ import javax.annotation.Nullable;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.compute.*;
-import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
@@ -62,7 +61,7 @@ public class ServerImage extends AbstractImageSupport {
     
     public MachineImage getOpSourceImage(String imageId) throws InternalException, CloudException{
     	
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listCustomerMachineImages();
+    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listCustomerMachineImages(ImageFilterOptions.getInstance());
 
         for( MachineImage img: images) {
 
@@ -72,7 +71,7 @@ public class ServerImage extends AbstractImageSupport {
         }
 
 
-        images = (ArrayList<MachineImage>) listOpSourceMachineImages();
+        images = (ArrayList<MachineImage>) listOpSourceMachineImages(ImageFilterOptions.getInstance());
      
         for( MachineImage img: images) {       	
             
@@ -87,21 +86,21 @@ public class ServerImage extends AbstractImageSupport {
     @Override
     public MachineImage getImage(@Nonnull String imageId) throws CloudException, InternalException {
         //First check the pending images, because it is mostly being checked by customers
-        ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
+        ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
         for(MachineImage image : list){
             if(image.getProviderMachineImageId().equals(imageId)){
                 return image;
             }
         }
 
-        list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
+        list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
         for(MachineImage image : list){
             if(image.getProviderMachineImageId().equals(imageId)){
                 return image;
             }
         }
 
-        list = (ArrayList<MachineImage>) listOpSourceMachineImages();
+        list = (ArrayList<MachineImage>) listOpSourceMachineImages(ImageFilterOptions.getInstance());
         for(MachineImage image : list){
             if(image.getProviderMachineImageId().equals(imageId)){
                 return image;
@@ -199,14 +198,14 @@ public class ServerImage extends AbstractImageSupport {
     	
     	if(method.parseRequestResult("Imaging", method.invoke(), "result", "resultDetail")){
     	   	//First check the pending images, because it is mostly being checked by customers
-        	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
+        	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
         	for(MachineImage image : list){
         		if(image.getName().equals(options.getName())){
         			return image;
         		}    		
         	}
         	//Check deployed Image
-        	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
+        	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
         	for(MachineImage image : list){
         		if(image.getName().equals(options.getName())){
         			return image;
@@ -236,7 +235,7 @@ public class ServerImage extends AbstractImageSupport {
         if( options == null || options.getAccountNumber() == null ) {
             ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
 
-            ArrayList<MachineImage> list =  (ArrayList<MachineImage>) listCustomerMachineImages();
+            ArrayList<MachineImage> list =  (ArrayList<MachineImage>) listCustomerMachineImages(options);
             if(list != null){
                 allList.addAll(list);
             }
@@ -258,21 +257,21 @@ public class ServerImage extends AbstractImageSupport {
                 throw new CloudException("No context was set for this request");
             }
             if( account == null || account.equals(ctx.getAccountNumber()) ) {
-                return listCustomerMachineImages();
+                return listCustomerMachineImages(options);
             }
-            return listOpSourceMachineImages();
+            return listOpSourceMachineImages(options);
         }
     }
 
-    private Iterable<MachineImage> listCustomerMachineImages() throws InternalException, CloudException {
+    private Iterable<MachineImage> listCustomerMachineImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
     	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
     	
-    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachineDeployedImages();
+    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachineDeployedImages(options);
     	if(list != null){
     		allList.addAll(list);
     	}
     	
-    	list = (ArrayList<MachineImage>) this.listCustomerMachinePendingImages();
+    	list = (ArrayList<MachineImage>) this.listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
     	if(list != null){
     		allList.addAll(list);
     	}
@@ -284,7 +283,7 @@ public class ServerImage extends AbstractImageSupport {
 	 *	image/deployedWithSoftwareLabels/{location-id}
      */
     
-    private Iterable<MachineImage> listCustomerMachineDeployedImages() throws InternalException, CloudException {
+    private Iterable<MachineImage> listCustomerMachineDeployedImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachineDeployedImages()");
         }
@@ -311,7 +310,7 @@ public class ServerImage extends AbstractImageSupport {
 	                Node node = matches.item(i);            
 	                MachineImage image = this.toImage(node, true, false, "");
 	                
-	                if( image != null ) {
+	                if( image != null && (options == null || options.matches(image)) ) {
 	                	list.add(image);
 	                }
 	            }
@@ -324,7 +323,7 @@ public class ServerImage extends AbstractImageSupport {
         }
     }
     
-    private Iterable<MachineImage> listCustomerMachinePendingImages() throws InternalException, CloudException {
+    private Iterable<MachineImage> listCustomerMachinePendingImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachinePendingImages()");
         }
@@ -352,7 +351,7 @@ public class ServerImage extends AbstractImageSupport {
                 Node node = matches.item(i);            
                 MachineImage image = toImage(node, true, true, "");
                 
-                if( image != null ) {
+                if( image != null && (options == null || options.matches(image)) ) {
                 	list.add(image);
                 }
             }
@@ -365,7 +364,7 @@ public class ServerImage extends AbstractImageSupport {
     }
     
     
-    public Iterable<MachineImage> listOpSourceMachineImages() throws InternalException, CloudException {
+    public Iterable<MachineImage> listOpSourceMachineImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
         }
@@ -392,7 +391,7 @@ public class ServerImage extends AbstractImageSupport {
             
             MachineImage image = toImage(node,false,false, "");
             
-            if( image != null ) {
+            if( image != null && (options == null || options.matches(image)) ) {
             	list.add(image);
             }
         }        
@@ -428,11 +427,6 @@ public class ServerImage extends AbstractImageSupport {
     }
 
     @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
-    }
-
-    @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException{
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
@@ -443,17 +437,24 @@ public class ServerImage extends AbstractImageSupport {
         method.requestResult("Removing image",method.invoke());
     }
 
-    public MachineImage searchImage(Platform platform, Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
-    
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages();
+    public MachineImage searchImage(@Nullable Platform platform, @Nullable Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
+        ImageFilterOptions options = ImageFilterOptions.getInstance();
+
+        if( platform != null ) {
+            options.onPlatform(platform);
+        }
+        if( architecture != null ) {
+            options.withArchitecture(architecture);
+        }
+    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages(options);
      
         for( MachineImage img: images) {        	
             
             if( img != null ) {
-                if(architecture == null || (architecture != null && !architecture.equals(img.getArchitecture())) ) {
+                if(architecture == null || !architecture.equals(img.getArchitecture()) ) {
                     continue;
                 }
-                if((platform == null) || (platform != null && !platform.equals(Platform.UNKNOWN)) ) {
+                if((platform == null) || !platform.equals(Platform.UNKNOWN) ) {
                    continue;
                 }
                 if(img.getTag("cpuCount") == null || img.getTag("memory") == null){
@@ -470,38 +471,11 @@ public class ServerImage extends AbstractImageSupport {
         }
         return null;    	
     }
-    
-    @Override
-    @Deprecated
-    public @Nonnull Iterable<MachineImage> searchMachineImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture) throws InternalException, CloudException {
-        return searchImages(null, keyword, platform, architecture, ImageClass.MACHINE);
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchImages(@Nullable String account, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ArrayList<MachineImage> list = new ArrayList<MachineImage>();
-
-        for( MachineImage img: listCustomerMachineImages() ) {
-            if( matches(img, keyword, platform, architecture, imageClasses) ) {
-                if( account == null || account.equals(img.getProviderOwnerId()) ) {
-                    list.add(img);
-                }
-            }
-        }
-        return list;
-    }
 
     @Nonnull
     @Override
-    public Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ArrayList<MachineImage> list = new ArrayList<MachineImage>();
-
-        for( MachineImage img: listOpSourceMachineImages() ) {
-            if( matches(img, keyword, platform, architecture, imageClasses) ) {
-                list.add(img);
-            }
-        }
-        return list;
+    public Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options) throws CloudException, InternalException {
+        return listOpSourceMachineImages(options);
     }
 
 
