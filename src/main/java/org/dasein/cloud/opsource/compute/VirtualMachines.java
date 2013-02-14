@@ -217,7 +217,15 @@ public class VirtualMachines implements VirtualMachineSupport {
                 System.out.println("current productString: " + currentProductId);
                 if(parts.length >= 3){
                     String[] currentDisks = currentProductId.substring(currentProductId.lastIndexOf(":") + 2, currentProductId.length()-1).split(",");
-                    int newDiskSize = Integer.parseInt(parts[2]);
+                    int newDiskSize = -1;
+                    parts[2] = parts[2].replace("[", "");
+                    parts[2] = parts[2].replace("]", "");
+                    if(parts[2].indexOf(",") > 0){
+                        newDiskSize = Integer.parseInt(parts[2].substring(parts[2].lastIndexOf(",")+1));
+                    }
+                    else{
+                        newDiskSize = Integer.parseInt(parts[2]);
+                    }
                     int currentDiskSize = 0;
                     try{
                         for(int i=0;i<currentDisks.length;i++){
@@ -390,9 +398,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>)listVirtualMachines();
         for(VirtualMachine vm : list ){
             try{
-                System.out.println("VM: " + (vm == null));
                 if(vm != null && vm.getName().equals(name)){
-                    System.out.println("VM Name: " + vm.getName());
                     return vm;
                 }
             }
@@ -670,7 +676,8 @@ public class VirtualMachines implements VirtualMachineSupport {
                 currentMemory = Integer.valueOf((String) server.getTag("memory"));
 
                 if( currentCPU != targetCPU || currentMemory != targetMemory ) {
-                    long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 20L);
+                    //long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 20L);
+                    long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 60L);
 
                     Exception currentException = null;
 
@@ -1003,7 +1010,8 @@ public class VirtualMachines implements VirtualMachineSupport {
         if(matches != null){
             ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
             for(int i=0;i<matches.getLength();i++){
-                vms.add(toVirtualMachineWithStatus(matches.item(i), ""));
+                VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
+                if(vm != null)vms.add(vm);
             }
             return vms;
         }
