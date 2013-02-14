@@ -341,12 +341,13 @@ public class OpSource extends AbstractCloud {
 	
 	public String getOrgId() throws InternalException,CloudException{
 		if(orgId == null){
-			String url = "https://api.opsourcecloud.net/oec/0.9/myaccount";
+			//String url = "https://api.opsourcecloud.net/oec/0.9/myaccount";
+            String url = getEndpoint() + "/oec/0.9/myaccount";
 			HashMap<String,String> parameters = new HashMap<String,String>();
 			
 			parameters.put(Content_Type_Key, Content_Type_Value_Single_Para);
 			parameters.put(HTTP_Method_Key, "GET");
-		
+
 			OpSourceMethod method = new OpSourceMethod(this, url, parameters);
 			Document doc = method.invoke();
             String sNS = "";
@@ -360,7 +361,7 @@ public class OpSource extends AbstractCloud {
 			
 		    }else{
 		    	throw new CloudException("Can not load orgId information!!!");
-		    }		
+		    }
 		}
 		return orgId;		
 	}
