@@ -66,7 +66,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
     static public final String REVOKE_SECURITY_GROUP_INGRESS    = "revokeSecurityGroupIngress";
     
     private OpSource provider;
-    
+
     SecurityGroup(OpSource provider) {
         super(provider);
         this.provider = provider;
@@ -93,8 +93,8 @@ public class SecurityGroup extends AbstractFirewallSupport {
         else nameElmt.setTextContent(destinationRuleTarget.getCidr());
 
         Element positionElmt = doc.createElement("position");
-
-        String positionId = getFirstAvaiablePositionForInsertRule(firewallId);
+        String positionId = precedence + "";
+        if(positionId.equals("-1"))positionId = getFirstAvaiablePositionForInsertRule(firewallId);
         if(positionId == null){
             throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
         }else{
@@ -184,7 +184,6 @@ public class SecurityGroup extends AbstractFirewallSupport {
             portRangeType.setTextContent("ALL");
             portRange.appendChild(portRangeType);
         }
-
 
         Element type = doc.createElement("type");
         type.setTextContent(direction.equals(Direction.INGRESS) ? "OUTSIDE_ACL" : "INSIDE_ACL");
@@ -502,26 +501,43 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
     @Nonnull
     @Override
-    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean b) throws InternalException, CloudException {
-        return null;  //TODO: Implement for 2013.01
+    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
+        Collection<RuleTargetType> destTypes = new ArrayList<RuleTargetType>();
+        if (!inVlan) {
+            destTypes.add(RuleTargetType.CIDR);
+            destTypes.add(RuleTargetType.GLOBAL);
+        }
+        return destTypes;
     }
 
     @Override
-    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean b) throws InternalException, CloudException{
-        return null; //TODO: Implement for 2013.02
+    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException{
+        Collection<RuleTargetType> sourceTypes = new ArrayList<RuleTargetType>();
+        if (!inVlan) {
+            sourceTypes.add(RuleTargetType.CIDR);
+            sourceTypes.add(RuleTargetType.GLOBAL);
+        }
+        return sourceTypes;
     }
 
     @Override
-    public Iterable<Direction> listSupportedDirections(boolean b) throws InternalException, CloudException{
-        return null; //TODO: Implement for 2013.02
+    public Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException{
+        Collection<Direction> directions = new ArrayList<Direction>();
+        if (!inVlan) {
+            directions.add(Direction.EGRESS);
+            directions.add(Direction.INGRESS);
+        }
+        return directions;
     }
 
     @Nonnull
     @Override
-    public Iterable<Permission> listSupportedPermissions(boolean b) throws InternalException, CloudException {
-        ArrayList<Permission> permissions = new ArrayList<Permission>();
-        permissions.add(Permission.ALLOW);
-        permissions.add(Permission.DENY);
+    public Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
+        Collection<Permission> permissions = new ArrayList<Permission>();
+        if (!inVlan) {
+            permissions.add(Permission.ALLOW);
+            permissions.add(Permission.DENY);
+        }
         return permissions;
     }
 

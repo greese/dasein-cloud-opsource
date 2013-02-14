@@ -32,6 +32,7 @@ import java.util.Properties;
 import javax.annotation.Nonnull;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
@@ -191,6 +192,10 @@ public class OpSourceMethod {
 	        	String requestBody = parameters.get(OpSource.HTTP_Post_Body_Key);
 	        	
 	            if (requestBody != null) {
+                    if(wire.isDebugEnabled()){
+                        wire.debug(requestBody);
+                    }
+
 	            	AbstractHttpEntity entity = new ByteArrayEntity(requestBody.getBytes());
 					entity.setContentType(parameters.get(OpSource.Content_Type_Key));
 					entityEnclosingMethod.setEntity(entity);
@@ -245,6 +250,24 @@ public class OpSourceMethod {
                             Document doc = null;
                             try{
                                 doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(input);
+                                if(wire.isDebugEnabled()){
+                                    try{
+                                        TransformerFactory transfac = TransformerFactory.newInstance();
+                                        Transformer trans = transfac.newTransformer();
+                                        trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                                        trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+                                        StringWriter sw = new StringWriter();
+                                        StreamResult result = new StreamResult(sw);
+                                        DOMSource source = new DOMSource(doc);
+                                        trans.transform(source, result);
+                                        String xmlString = sw.toString();
+                                        wire.debug(xmlString);
+                                    }
+                                    catch(Exception ex){
+                                        ex.printStackTrace();
+                                    }
+                                }
                             }
                             catch(Exception ex){
                                 ex.printStackTrace();
@@ -288,6 +311,24 @@ public class OpSourceMethod {
                     if(responseBody != null){
                         parseError(status, responseBody);
                         Document parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
+                        if(wire.isDebugEnabled()){
+                            try{
+                                TransformerFactory transfac = TransformerFactory.newInstance();
+                                Transformer trans = transfac.newTransformer();
+                                trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                                trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+                                StringWriter sw = new StringWriter();
+                                StreamResult result = new StreamResult(sw);
+                                DOMSource source = new DOMSource(parsedError);
+                                trans.transform(source, result);
+                                String xmlString = sw.toString();
+                                wire.debug(xmlString);
+                            }
+                            catch(Exception ex){
+                                ex.printStackTrace();
+                            }
+                        }
                         return parsedError;
                     }
         		}
