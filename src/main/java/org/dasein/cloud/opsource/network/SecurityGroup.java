@@ -122,7 +122,7 @@ public class SecurityGroup implements FirewallSupport {
 
         Element positionElmt = doc.createElement("position");
         String positionId = precedence + "";
-        if(positionId.equals("-1"))positionId = getFirstAvaiablePositionForInsertRule(firewallId);
+        if(precedence <= 0)positionId = getFirstAvaiablePositionForInsertRule(firewallId);
         if(positionId == null){
             throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
         }else{
@@ -412,12 +412,11 @@ public class SecurityGroup implements FirewallSupport {
     	if(list == null){
     		return null;
     	}
-    	
+
     	for(int i = 100;i<= 500;i ++){
     		String position = String.valueOf(i);
     		boolean isExist = false;
     		for(FirewallRule rule: list){
-
                 if(position.equals(getFirewallPositionIdFromDaseinRuleId(rule.getProviderRuleId()))){
     				isExist = true;
     				break;
