@@ -68,21 +68,21 @@
       <dependency>
           <groupId>org.dasein</groupId>
           <artifactId>dasein-util</artifactId>
-          <version>2012.08</version>
+          <version>2013.02</version>
           <type>jar</type>
           <scope>compile</scope>
       </dependency>
     <dependency>
     	<groupId>org.apache.httpcomponents</groupId>
     	<artifactId>httpclient</artifactId>
-    	<version>4.2</version>
+    	<version>4.2.1</version>
     	<type>jar</type>
     	<scope>compile</scope>
     </dependency>
     <dependency>
     	<groupId>org.apache.httpcomponents</groupId>
     	<artifactId>httpcore</artifactId>
-    	<version>4.2</version>
+    	<version>4.2.1</version>
     	<type>jar</type>
     	<scope>compile</scope>
     </dependency>
@@ -98,7 +98,7 @@
       <dependency>
           <groupId>junit</groupId>
           <artifactId>junit</artifactId>
-          <version>4.8.1</version>
+          <version>4.9</version>
           <type>jar</type>
           <scope>test</scope>
       </dependency>
