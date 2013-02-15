@@ -146,10 +146,12 @@ public class VirtualMachines implements VirtualMachineSupport {
         }
         try{
             String[] parts;
-            if(vmScalingOptions.getProviderProductId().contains(":")){
+            try{
                 parts = vmScalingOptions.getProviderProductId().split(":");
             }
-            else parts = new String[]{vmScalingOptions.getProviderProductId()};
+            catch(Exception ex){
+                throw new CloudException("Invalid product string format. Ensure you are using the format CPU:RAM:[HDD(s)]");
+            }
 
             HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
             Param param = new Param(OpSource.SERVER_BASE_PATH, null);
@@ -216,51 +218,50 @@ public class VirtualMachines implements VirtualMachineSupport {
                 String currentProductId = vm.getProductId();
                 System.out.println("current productString: " + currentProductId);
                 if(parts.length >= 3){
-                    String[] currentDisks = currentProductId.substring(currentProductId.lastIndexOf(":") + 2, currentProductId.length()-1).split(",");
-                    int newDiskSize = -1;
-                    parts[2] = parts[2].replace("[", "");
-                    parts[2] = parts[2].replace("]", "");
-                    if(parts[2].indexOf(",") > 0){
-                        newDiskSize = Integer.parseInt(parts[2].substring(parts[2].lastIndexOf(",")+1));
-                    }
+                    String currentDiskString = currentProductId.substring(currentProductId.lastIndexOf(":") + 1);
+                    if(parts[2].equals(currentDiskString)) return getVirtualMachine(serverId);
                     else{
-                        newDiskSize = Integer.parseInt(parts[2]);
-                    }
-                    int currentDiskSize = 0;
-                    try{
-                        for(int i=0;i<currentDisks.length;i++){
-                            currentDiskSize += Integer.parseInt(currentDisks[i]);
-                        }
-                        System.out.println("New size: " + newDiskSize + ", " + currentDiskSize);
-                        if(newDiskSize > currentDiskSize){
-                            final int delta = newDiskSize - currentDiskSize;
+                        parts[2] = parts[2].replace("[", "");
+                        parts[2] = parts[2].replace("]", "");
+                        currentDiskString = currentDiskString.replace("[", "");
+                        currentDiskString = currentDiskString.replace("]", "");
 
-                            final String fServerId = serverId;
-                            Thread t = new Thread(){
-                                public void run(){
-                                    provider.hold();
-                                    try{
+                        String[] newDisks;
+                        String[] currentDisks;
+                        if(parts[2].indexOf(",") > 0)newDisks = parts[2].split(",");
+                        else newDisks = new String[]{parts[2]};
+                        if(currentDiskString.indexOf(",") > 0)currentDisks = currentDiskString.split(",");
+                        else currentDisks = new String[]{currentDiskString};
+
+                        if(currentDisks.length > newDisks.length) throw new CloudException("Only scaling up is supported for disk alterations.");
+                        else{
+                            try{
+                                final int newDiskSize = Integer.parseInt(newDisks[newDisks.length-1]);
+                                final String fServerId = serverId;
+                                Thread t = new Thread(){
+                                    public void run(){
+                                        provider.hold();
                                         try{
-                                            System.out.println("Doing add: " + fServerId + ", delta: " + delta);
-                                            addLocalStorage(fServerId, delta);
+                                            try{
+                                                addLocalStorage(fServerId, newDiskSize);
+                                            }
+                                            catch (Throwable th){
+                                                logger.debug("Alter VM failed while adding storage. CPU and RAM alteration may have been sucessful.");
+                                            }
                                         }
-                                        catch (Throwable th){
-                                            logger.debug("Alter VM failed while adding storage. CPU and RAM alteration may have been sucessful.");
+                                        finally {
+                                            provider.release();
                                         }
                                     }
-                                    finally {
-                                        provider.release();
-                                    }
-                                }
-                            };
-                            t.setName("Alter OpSource VM: " + vm.getProviderVirtualMachineId());
-                            t.setDaemon(true);
-                            t.start();
+                                };
+                                t.setName("Alter OpSource VM: " + vm.getProviderVirtualMachineId());
+                                t.setDaemon(true);
+                                t.start();
+                            }
+                            catch(NumberFormatException ex){
+                                throw new CloudException("Invalid format for HDD in product description.");
+                            }
                         }
-                        else throw new CloudException("Only scaling up is supported for disk alterations.");
-                    }
-                    catch(NumberFormatException ex){
-                        throw new CloudException("Invalid format for HDD in product description.");
                     }
                 }
                 return getVirtualMachine(serverId);
