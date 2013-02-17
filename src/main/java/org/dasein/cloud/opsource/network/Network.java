@@ -30,25 +30,31 @@ import javax.annotation.Nullable;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 
-import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.*;
-import org.dasein.cloud.opsource.CallCache;
+import org.dasein.cloud.network.AbstractVLANSupport;
+import org.dasein.cloud.network.IPVersion;
+import org.dasein.cloud.network.Networkable;
+import org.dasein.cloud.network.Subnet;
+import org.dasein.cloud.network.SubnetCreateOptions;
+import org.dasein.cloud.network.SubnetState;
+import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.network.VLANState;
+import org.dasein.cloud.network.VLANSupport;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
+import org.dasein.util.uom.time.Minute;
+import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class Network extends AbstractVLANSupport {
+    static public final Logger logger = OpSource.getLogger(VLANSupport.class);
 
-    static public final Logger logger = Logger.getLogger(VLANSupport.class);
-
-    static public final String CREATE_NETWORK         = "createNetwork";
-    static public final String LIST_NETWORK_OFFERINGS = "listNetworkOfferings";
-    static public final String LIST_NETWORKS          = "listNetworks";
-    
     private OpSource provider;
     
     Network(OpSource provider) {
@@ -59,56 +65,6 @@ public class Network extends AbstractVLANSupport {
     @Override
     public boolean allowsNewSubnetCreation() throws CloudException, InternalException {
         return true;
-    }
-
-    @Override
-    public void assignRoutingTableToSubnet(@Nonnull String subnetId, @Nonnull String routingTableId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-    @Override
-    public void assignRoutingTableToVlan(@Nonnull String vlanId, @Nonnull String routingTableId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-    @Override
-    public void attachNetworkInterface(@Nonnull String nicId, @Nonnull String vmId, int index) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Network interfaces not supported");
-    }
-
-    @Override
-    public String createInternetGateway(@Nonnull String forVlanId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Internet gateways not supported");
-    }
-
-    @Override
-    public @Nonnull String createRoutingTable(@Nonnull String forVlanId, @Nonnull String name, @Nonnull String description) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-    @Override
-    public @Nonnull NetworkInterface createNetworkInterface(@Nonnull NICCreateOptions options) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Network interfaces not supported");
-    }
-
-    @Override
-    public void addRouteToAddress(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String address) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-    @Override
-    public void addRouteToGateway(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String gatewayId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-    @Override
-    public void addRouteToNetworkInterface(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String nicId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-    @Override
-    public void addRouteToVirtualMachine(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String vmId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
     }
 
     @Override
@@ -127,17 +83,14 @@ public class Network extends AbstractVLANSupport {
     }
     
     @Override
-    public VLAN getVlan(String vlanId) throws CloudException, InternalException {
-     	ArrayList<VLAN> list = (ArrayList<VLAN>) listVlans();
-      	if(list == null){
-      		return null;      		
-      	}
-      	for(VLAN vlan : list){
-      		if(vlan.getProviderVlanId().equals(vlanId)){
-      			return vlan;      			
-      		}
-      	}
-      	return null;
+    public @Nullable VLAN getVlan(@Nonnull String vlanId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.getVlan");
+        try {
+            return super.getVlan(vlanId);
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -149,158 +102,157 @@ public class Network extends AbstractVLANSupport {
     public boolean isSubscribed() throws CloudException, InternalException {
         return true;
     }
-        
-    @Override
-    public Iterable<VLAN> listVlans() throws CloudException, InternalException {
-      	ArrayList<VLAN> list = new ArrayList<VLAN>();
+
+    private @Nonnull Iterable<VLAN> fetchVlans() throws CloudException, InternalException {
+        ArrayList<VLAN> list = new ArrayList<VLAN>();
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param("networkWithLocation", null);
-    	parameters.put(0, param);
-    	
-    	//param = new Param(provider.getDefaultRegionId(), null);//Removed this as it appears to break when switching regions
-      	//parameters.put(1, param);
-    	
-    	OpSourceMethod method = new OpSourceMethod(provider,
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();
+        parameters.put(0, param);
+
+        //param = new Param(provider.getDefaultRegionId(), null);//Removed this as it appears to break when switching regions
+        //parameters.put(1, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null,true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        Document doc = method.invoke();
         //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
 
         String sNS = "";
         try{
             sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
         }
-        catch(IndexOutOfBoundsException ex){}
+        catch(IndexOutOfBoundsException ignore){
+            // ignore
+        }
         NodeList matches = doc.getElementsByTagName(sNS + "network");
 
         if(matches != null){
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
 
-                VLAN vlan = toVLAN(node);                
+                VLAN vlan = toVLAN(node);
                 if( vlan != null ) {
-                	list.add(vlan);
+                    list.add(vlan);
                 }
             }
         }
-        return list; 
+        Cache<VLAN> cache = Cache.getInstance(getProvider(), "vlans", VLAN.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Minute>(3, TimePeriod.MINUTE));
+
+        cache.put(getContext(), list);
+        return list;
     }
 
     @Override
-    public void removeInternetGateway(@Nonnull String forVlanId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Internet gateways not supported");
+    public @Nonnull Iterable<VLAN> listVlans() throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.listVlans");
+        try {
+            Cache<VLAN> cache = Cache.getInstance(getProvider(), "vlans", VLAN.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Minute>(3, TimePeriod.MINUTE));
+            Iterable<VLAN> vlans = cache.get(getContext());
+
+            if( vlans != null ) {
+                return vlans;
+            }
+            return fetchVlans();
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
-    public void removeNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Network interfaces not supported");
-    }
-
-    @Override
-    public void removeRoute(@Nonnull String inRoutingTableId, @Nonnull String destinationCidr) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-    @Override
-    public void removeRoutingTable(@Nonnull String routingTableId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Routing tables not supported");
-    }
-
-
-    @Override
-    public VLAN createVlan(String cidr, String name, String description, String domainName, String[] dnsServers, String[] ntpServers) throws CloudException, InternalException {
-        
+    public @Nonnull VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nonnull String domainName, @Nonnull String[] dnsServers, @Nonnull String[] ntpServers) throws CloudException, InternalException {
     	if( !allowsNewVlanCreation() ) {
             throw new OperationNotSupportedException("Dose not allow to create VLAN");
         }
-              	
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        
-        Param param;
-        
-        //Create post body
-        Document doc = provider.createDoc();
-        Element vlan ;
-        Element location = null ;
-        if(provider.getContext().getRegionId() == null){
-        	param = new Param(OpSource.NETWORK_BASE_PATH, null);
-        	vlan = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "Network");
-        	
-        }else{
-        	// Create a network under specific region
-        	param = new Param("networkWithLocation", null);
-        	vlan = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "NewNetworkWithLocation");
-            
-        	location = doc.createElement("location");
-            
-            location.setTextContent(provider.getContext().getRegionId());
-        }        
-    	parameters.put(0, param);  	
-      	
-        Element nameElmt = doc.createElement("name");
-       
-        nameElmt.setTextContent(name);
-       
-        Element descriptionElmt = doc.createElement("description");        
-        
-        descriptionElmt.setTextContent(description);
-        
-        vlan.appendChild(nameElmt);
-        vlan.appendChild(descriptionElmt);
-        if(location != null){
-            vlan.appendChild(location);
+        APITrace.begin(getProvider(), "VLAN.createVlan");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+
+            Param param;
+
+            //Create post body
+            Document doc = provider.createDoc();
+            Element vlan ;
+            Element location = null ;
+            if(getContext().getRegionId() == null){
+                param = new Param(OpSource.NETWORK_BASE_PATH, null);
+                vlan = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "Network");
+
+            }
+            else{
+                // Create a network under specific region
+                param = new Param("networkWithLocation", null);
+                vlan = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "NewNetworkWithLocation");
+
+                location = doc.createElement("location");
+
+                location.setTextContent(provider.getContext().getRegionId());
+            }
+            parameters.put(0, param);
+
+            Element nameElmt = doc.createElement("name");
+
+            nameElmt.setTextContent(name);
+
+            Element descriptionElmt = doc.createElement("description");
+
+            descriptionElmt.setTextContent(description);
+
+            vlan.appendChild(nameElmt);
+            vlan.appendChild(descriptionElmt);
+            if(location != null){
+                vlan.appendChild(location);
+            }
+            doc.appendChild(vlan);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
+
+            String vlanId = method.getRequestResultId("Creating VLan", method.invoke(), "result", "resultDetail");
+
+            if( vlanId == null ) {
+                throw new CloudException("Creating VLan fails without explaination !!!");
+            }
+            for( VLAN v : fetchVlans() ) {
+                if( v.getProviderVlanId().equals(vlanId) ) {
+                    return v;
+                }
+            }
+            throw new CloudException("Unable to find newly created VLANs among list of VLANs");
         }
-        doc.appendChild(vlan);
-        
-    	OpSourceMethod method = new OpSourceMethod(provider, 
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
-      	
-    	String vlanId = method.getRequestResultId("Creating VLan", method.invoke(), "result", "resultDetail");
-      	if(vlanId != null){
-              CallCache.getInstance().resetCacheTimer("networkWithLocation");
-              return this.getVlan(vlanId);
-      	}else{
-              throw new CloudException("Creating VLan fails without explaination !!!");
-      	}
-      	
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
-    public void detachNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Network interfaces not supported");
-    }
+    public void removeVlan(String vlanId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.removeVlan");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
 
-    @Override
-    public int getMaxNetworkInterfaceCount() throws CloudException, InternalException {
-        return 0;
-    }
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
 
-    @Override
-    public void removeVlan(String vlanId) throws CloudException, InternalException { 
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-    	parameters.put(0, param);
-    	
-    	param = new Param(vlanId, null);
-    	parameters.put(1, param);    
-    	
-    	OpSourceMethod method = new OpSourceMethod(provider, 
-    			provider.buildUrl("delete",true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-    	method.parseRequestResult("Removing Vlan",method.invoke(), "result", "resultDetail");
-        CallCache.getInstance().resetCacheTimer("networkWithLocation");
-    }
+            param = new Param(vlanId, null);
+            parameters.put(1, param);
 
-    @Override
-    public boolean supportsInternetGatewayCreation() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean supportsRawAddressRouting() throws CloudException, InternalException {
-        return false;
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl("delete",true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+            method.parseRequestResult("Removing Vlan",method.invoke(), "result", "resultDetail");
+            try {
+                fetchVlans(); // resets the cache
+            }
+            catch( Throwable ignore ) {
+                // ignore
+            }
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     public VLAN toVLAN(Node node) {
@@ -313,7 +265,9 @@ public class Network extends AbstractVLANSupport {
         try{
             sNS = node.getNodeName().substring(0, node.getNodeName().indexOf(":") + 1);
         }
-        catch(IndexOutOfBoundsException ex){}
+        catch(IndexOutOfBoundsException ignore){
+            // ignore
+        }
         
         NodeList attributes = node.getChildNodes();
 
@@ -416,7 +370,7 @@ public class Network extends AbstractVLANSupport {
             if( netmask == null ) {
                 netmask = "255.255.255.0";
             }
-            network.setCidr(toCidr(gateway, netmask));
+            network.setCidr(netmask, gateway);
         }
         return network;
     }
@@ -430,7 +384,9 @@ public class Network extends AbstractVLANSupport {
         try{
             sNS = node.getNodeName().substring(0, node.getNodeName().indexOf(":") + 1);
         }
-        catch(IndexOutOfBoundsException ex){}
+        catch(IndexOutOfBoundsException ignore){
+            // ignore
+        }
         
         network.setProviderRegionId(provider.getContext().getRegionId());
         network.setProviderDataCenterId(network.getProviderRegionId());
@@ -459,7 +415,7 @@ public class Network extends AbstractVLANSupport {
                 network.setDescription(value);
             }
             else if( name.equalsIgnoreCase(sNS + "location") ) {
-                if(value != provider.getContext().getRegionId()){ 
+                if( !value.equals(provider.getContext().getRegionId())){
                 	return null;
                 }                
             }
@@ -487,7 +443,9 @@ public class Network extends AbstractVLANSupport {
         try{
             sNS = node.getNodeName().substring(0, node.getNodeName().indexOf(":") + 1);
         }
-        catch(IndexOutOfBoundsException ex){}
+        catch(IndexOutOfBoundsException ignore){
+            // ignore
+        }
         
         NodeList attributes = node.getChildNodes();
         
@@ -567,7 +525,7 @@ public class Network extends AbstractVLANSupport {
         return list;
     }
     
-   public Collection<Subnet> toSubnet(String vlanId, Node node) throws InternalException, CloudException {
+   public @Nonnull Collection<Subnet> toSubnet(@Nonnull String vlanId, @Nonnull Node node) throws InternalException, CloudException {
     	
     	ArrayList<Subnet> list = new ArrayList<Subnet>();
         if( node == null ) {
@@ -579,7 +537,9 @@ public class Network extends AbstractVLANSupport {
        try{
            sNS = node.getNodeName().substring(0, node.getNodeName().indexOf(":") + 1);
        }
-       catch(IndexOutOfBoundsException ex){}
+       catch(IndexOutOfBoundsException ignore){
+           // ignore
+       }
         
         NodeList attributes = node.getChildNodes();
                 
@@ -597,7 +557,7 @@ public class Network extends AbstractVLANSupport {
             }
             if( name.equalsIgnoreCase(sNS + "id") ) {
             	if(vlanId != null){
-            		continue;
+            		continue;   // TODO: Andy: what is this supposed to do?
             	}            	
             }            
             else if( name.equalsIgnoreCase(sNS + "location")  ) {
@@ -610,24 +570,23 @@ public class Network extends AbstractVLANSupport {
 	           		if(publicIpAttribute.getNodeType() == Node.TEXT_NODE) continue;
 	 	           
 	           		if( publicIpAttribute.getNodeName().equals(sNS + "IpBlock") ){
-	 	            	Subnet  subnet = new Subnet();
-	 	            	HashMap<String,String> tags = new HashMap<String, String>();
-	 	            	subnet.setTags(tags);
-	 	            	
 	 	            	String baseIp=null;
 		            	int mask = -1;
 		            	int size = -1;
 	 	            	NodeList ipItems  = publicIpAttribute.getChildNodes();
+
+                        String subnetId = null;
+                        String networkDefault = null;
+
 	 		            for(int k=0;k<ipItems.getLength();k++ ){
 	 		            	Node ipItem = ipItems.item(k);
 	 		            	if(ipItem.getNodeType() == Node.TEXT_NODE) continue;
 	 		            	
 	 		            	if( ipItem.getNodeName().equals(sNS + "id") && ipItem.getFirstChild().getNodeValue() != null ) {
-	 		                	subnet.setProviderSubnetId(ipItem.getFirstChild().getNodeValue());
+	 		                	subnetId = ipItem.getFirstChild().getNodeValue().trim();
 	 		                }
 	 		                else if( ipItem.getNodeName().equals(sNS + "baseIp") && ipItem.getFirstChild().getNodeValue() != null ) {
 	 		                	baseIp = ipItem.getFirstChild().getNodeValue();
-	 		                	subnet.getTags().put("baseIp", baseIp);
 	 		                }
 	 		                else if( ipItem.getNodeName().equals(sNS + "subnetSize") && ipItem.getFirstChild().getNodeValue() != null ) {
 	 		                	String itemValue = ipItem.getFirstChild().getNodeValue();
@@ -639,7 +598,7 @@ public class Network extends AbstractVLANSupport {
 	 		                	} 		                	
 	 		                }
 	 		                else if( ipItem.getNodeName().equals(sNS + "networkDefault") && ipItem.getFirstChild().getNodeValue() != null ) {
-	 		                	subnet.getTags().put("networkDefault", ipItem.getFirstChild().getNodeValue());
+	 		                	networkDefault = ipItem.getFirstChild().getNodeValue().trim();
 	 		                }
 	 		                else if( ipItem.getNodeName().equals(sNS + "serverToVipConnectivity") && ipItem.getFirstChild().getNodeValue() != null ) {
 	 		                	//TODO
@@ -647,30 +606,33 @@ public class Network extends AbstractVLANSupport {
 	 		            }
 	 		            
 	 		            if( baseIp == null){
+                             logger.warn("Found subnet with null baseIp: " + subnetId);
 	 		            	continue;	 		        	  
 	 		            }
+
+                        String cidr;
+
 	 		            if(baseIp != null && !(mask == -1)){
-		                	subnet.setCidr(baseIp + "/" + mask);
-	 		            }	 	
-	 		            subnet.setProviderVlanId(vlanId);
-	 		            
-	 		            subnet.setProviderOwnerId(provider.getContext().getAccountNumber());
-	 		          
-	 		            subnet.setCurrentState(SubnetState.AVAILABLE);
-	 		           
-	 		            if(regionId == null){
+		                	cidr = baseIp + "/" + mask;
+	 		            }
+                        else {
+                             cidr = "0.0.0.0/0";
+                        }
+                        if(regionId == null){
 	 		            	regionId = provider.getDefaultRegionId();	 		            	            	
 	 		            }
-	 		            
-	 		            subnet.setProviderDataCenterId(provider.getDataCenterId(regionId));
-	 		            
-	 		            if( subnet.getName() == null ) {
-	 		            	subnet.setName(baseIp);
-	 		            }
-	 		            if( subnet.getDescription() == null ) {
-	 		            	subnet.setDescription(subnet.getName());
-	 		            }	 		             		           
-	 		            list.add(subnet);
+                        if( subnetId != null ) {
+                            Subnet subnet = Subnet.getInstance(getContext().getAccountNumber(), regionId, vlanId, subnetId, SubnetState.AVAILABLE, name, name, cidr).constrainedToDataCenter(provider.getDataCenterId(regionId));
+
+                            subnet.setTag("baseIp", baseIp);
+                            if( networkDefault != null ) {
+                                subnet.setTag("networkDefault", networkDefault);
+                            }
+                            list.add(subnet);
+                        }
+                        else {
+                            logger.warn("Bad subnet " + baseIp + " with null ID");
+                        }
 	 	            }
            		}                      	
             }
@@ -679,32 +641,43 @@ public class Network extends AbstractVLANSupport {
     }
 
     @Override
-    public Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
+    public @Nonnull Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
        return createSubnet(options.getProviderVlanId());
     }
 
-    public Subnet createSubnet(String inProviderVlanId) throws CloudException, InternalException {
-    	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-        
-       	parameters.put(0, param);
-       	
-       	param = new Param(inProviderVlanId, null);
-        
-       	parameters.put(1, param);
-       	
-       	param = new Param("publicip", null);
-        
-       	parameters.put(2, param);
-        	
-       	OpSourceMethod method = new OpSourceMethod(provider, 
-       			provider.buildUrl("reserveNew",true, parameters),
-       			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-         	
-        //Result would be something like: Public IP block with base IP 207.20.37.208 is reserved
-       	String result = method.requestResult("Creating subnet", method.invoke(), "result", "resultDetail");
-       	
-       	return getSubnetResponseInfo(result);       	
+    public @Nonnull Subnet createSubnet(@Nonnull String inProviderVlanId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.createSubnet");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+
+            parameters.put(0, param);
+
+            param = new Param(inProviderVlanId, null);
+
+            parameters.put(1, param);
+
+            param = new Param("publicip", null);
+
+            parameters.put(2, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl("reserveNew",true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+
+            //Result would be something like: Public IP block with base IP 207.20.37.208 is reserved
+            String result = method.requestResult("Creating subnet", method.invoke(), "result", "resultDetail");
+
+            Subnet subnet = getSubnetResponseInfo(result);
+
+            if( subnet == null ) {
+                throw new CloudException("Unable to identify a valid subnet in the response");
+            }
+            return subnet;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -723,42 +696,14 @@ public class Network extends AbstractVLANSupport {
     }
 
     @Override
-    public NetworkInterface getNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
-        return null;
-    }
-
-    @Override
-    public RoutingTable getRoutingTableForSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-        return null;
-    }
-
-    @Override
-    public @Nonnull Requirement getRoutingTableSupport() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public RoutingTable getRoutingTableForVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-        return null;
-    }
-
-    @Override
-    public Subnet getSubnet(String subnetId) throws CloudException, InternalException {
-        ArrayList<VLAN> vlanList = (ArrayList<VLAN>) listVlans();
-        if(vlanList == null){
-        	return null;
+    public @Nullable Subnet getSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.getSubnet");
+        try {
+            return super.getSubnet(subnetId);
         }
-        for(VLAN vlan : vlanList){        	
-        	ArrayList<Subnet> list = (ArrayList<Subnet>) this.listSubnets(vlan.getProviderVlanId());
-        	if(list == null)
-        		continue;
-        	for(Subnet subnet : list){
-        		if(subnet.getProviderSubnetId().equals(subnetId)){
-        			return subnet;        			
-        		}        		
-        	}
-        }    	
-        return null;    	
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -766,16 +711,13 @@ public class Network extends AbstractVLANSupport {
         return Requirement.NONE;
     }
 
-    public Subnet getSubnetResponseInfo( @Nonnull String continaBaseIpInfo) throws CloudException, InternalException {
+    public @Nullable Subnet getSubnetResponseInfo( @Nonnull String continaBaseIpInfo) throws CloudException, InternalException {
         ArrayList<VLAN> vlanList = (ArrayList<VLAN>) listVlans();
-        if(vlanList == null){
-        	return null;
-        }
+
         for(VLAN vlan : vlanList){
         	
         	ArrayList<Subnet> list = (ArrayList<Subnet>) this.listSubnets(vlan.getProviderVlanId());
-        	if(list == null)
-        		continue;
+
         	for(Subnet subnet : list){
         		if(continaBaseIpInfo.contains(subnet.getTags().get("baseIp"))){
         			return subnet;        			
@@ -792,43 +734,7 @@ public class Network extends AbstractVLANSupport {
     }
 
     @Override
-    public @Nonnull Collection<String> listFirewallIdsForNIC(@Nonnull String nicId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Nonnull
-    @Override
-    public Iterable<ResourceStatus> listNetworkInterfaceStatus() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfaces() throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesForVM(@Nonnull String forVmId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesInSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesInVLAN(@Nonnull String vlanId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<RoutingTable> listRoutingTables(@Nonnull String inVlanId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException{
+    public @Nonnull Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException{
         return Collections.emptyList();//TODO: Implement for 2013.02
     }
 
@@ -839,41 +745,49 @@ public class Network extends AbstractVLANSupport {
     
     @Override
     public @Nonnull Iterable<Subnet> listSubnets(@Nonnull String inVlanId) throws CloudException, InternalException {
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param("networkWithLocation", null);
-    	parameters.put(0, param);
-    	
-    	param = new Param(inVlanId, null);
-       	parameters.put(1, param);
-       	
-    	param = new Param("config", null);
-       	parameters.put(2, param);
-    	
-    	ArrayList<Subnet> list = new ArrayList<Subnet>();
-    	
-    	OpSourceMethod method = new OpSourceMethod(provider,
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();
-        //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+        APITrace.begin(getProvider(), "VLAN.listSubnets");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param("networkWithLocation", null);
+            parameters.put(0, param);
 
-        String sNS = "";
-        try{
-            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
-        }
-        catch(IndexOutOfBoundsException ex){}
-        NodeList matches = doc.getElementsByTagName(sNS + "NetworkConfigurationWithLocation");
-        if(matches != null){
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);            
-                ArrayList<Subnet> subnetList = (ArrayList<Subnet>) toSubnet(inVlanId, node);
-                
-                if( subnetList != null ) {
-                	list.addAll(subnetList);
+            param = new Param(inVlanId, null);
+            parameters.put(1, param);
+
+            param = new Param("config", null);
+            parameters.put(2, param);
+
+            ArrayList<Subnet> list = new ArrayList<Subnet>();
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+            Document doc = method.invoke();
+            //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+
+            String sNS = "";
+            try{
+                sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ignore){
+                // ignore
+            }
+            NodeList matches = doc.getElementsByTagName(sNS + "NetworkConfigurationWithLocation");
+            if(matches != null){
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+                    ArrayList<Subnet> subnetList = (ArrayList<Subnet>) toSubnet(inVlanId, node);
+
+                    if( subnetList != null ) {
+                        list.addAll(subnetList);
+                    }
                 }
             }
+            return list;
         }
-        return list;      
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -881,17 +795,17 @@ public class Network extends AbstractVLANSupport {
         return Collections.singletonList(IPVersion.IPV4);
     }
 
-    @Nonnull
     @Override
-    public Iterable<ResourceStatus> listVlanStatus() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+    public @Nonnull Iterable<ResourceStatus> listVlanStatus() throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.listVlanStatus");
+        try {
+            return super.listVlanStatus();
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
-    }
-    
     /**
      * https://<Cloud API URL>/oec/0.9/{org-id}/network/{netid}/
      *  publicip/{ipblock-id}?release
@@ -899,74 +813,35 @@ public class Network extends AbstractVLANSupport {
 
     @Override
     public void removeSubnet(String providerSubnetId) throws CloudException, InternalException {
-        Subnet subnet = getSubnet(providerSubnetId);
-       
-        if(subnet == null){
-        	throw new CloudException("Fail to remove the subnet because no vlan found for this subnet!!!");
+        APITrace.begin(getProvider(), "VLAN.removeSubnet");
+        try {
+            Subnet subnet = getSubnet(providerSubnetId);
+
+            if(subnet == null){
+                throw new CloudException("Fail to remove the subnet because no vlan found for this subnet!!!");
+            }
+
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
+
+            param = new Param(subnet.getProviderVlanId(), null);
+            parameters.put(1, param);
+
+            param = new Param("publicip", null);
+            parameters.put(2, param);
+
+            param = new Param(providerSubnetId, null);
+            parameters.put(3, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl("release",true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+
+            method.parseRequestResult("Removing subnet",method.invoke(), "result", "resultDetail");
         }
-    	
-    	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-        parameters.put(0, param);
-                
-    	param = new Param(subnet.getProviderVlanId(), null);
-    	parameters.put(1, param);  
-    	
-    	param = new Param("publicip", null);
-    	parameters.put(2, param); 
-    	
-    	param = new Param(providerSubnetId, null);
-    	parameters.put(3, param); 
-    	
-    	OpSourceMethod method = new OpSourceMethod(provider, 
-    			provider.buildUrl("release",true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-    	
-    	method.parseRequestResult("Removing subnet",method.invoke(), "result", "resultDetail");
-    }
-    
-    private String toCidr(String gateway, String netmask) {
-        String[] dots = netmask.split("\\.");
-        int cidr = 0;
-        
-        for( String item : dots ) {
-            int x = Integer.parseInt(item);
-            
-            for( ; x > 0 ; x = (x<<1)%256 ) {
-                cidr++;
-            }
+        finally {
+            APITrace.end();
         }
-        StringBuilder network = new StringBuilder();
-        
-        dots = gateway.split("\\.");
-        int start = 0;
-        
-        for( String item : dots ) {
-            if( ((start+8) < cidr) || cidr == 0 ) {
-                network.append(item);
-            }
-            else {
-                int addresses = (int)Math.pow(2, (start+8)-cidr);
-                int subnets = 256/addresses;
-                int gw = Integer.parseInt(item);
-                
-                for( int i=0; i<subnets; i++ ) {
-                    int base = i*addresses;
-                    int top = ((i+1)*addresses);
-                    
-                    if( gw >= base && gw < top ) {
-                        network.append(String.valueOf(base));
-                        break;
-                    }
-                }
-            }
-            start += 8;
-            if( start < 32 ) {
-                network.append(".");
-            }
-        }
-        network.append("/");
-        network.append(String.valueOf(cidr));
-        return network.toString();
     }
 }
