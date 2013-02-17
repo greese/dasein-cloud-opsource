@@ -33,6 +33,7 @@ import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
 
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -85,29 +86,35 @@ public class ServerImage extends AbstractImageSupport {
     @Nullable
     @Override
     public MachineImage getImage(@Nonnull String imageId) throws CloudException, InternalException {
-        //First check the pending images, because it is mostly being checked by customers
-        ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
-        for(MachineImage image : list){
-            if(image.getProviderMachineImageId().equals(imageId)){
-                return image;
+        APITrace.begin(provider, "Image.getImage");
+        try {
+            //First check the pending images, because it is mostly being checked by customers
+            ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
+            for(MachineImage image : list){
+                if(image.getProviderMachineImageId().equals(imageId)){
+                    return image;
+                }
             }
-        }
 
-        list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
-        for(MachineImage image : list){
-            if(image.getProviderMachineImageId().equals(imageId)){
-                return image;
+            list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
+            for(MachineImage image : list){
+                if(image.getProviderMachineImageId().equals(imageId)){
+                    return image;
+                }
             }
-        }
 
-        list = (ArrayList<MachineImage>) listOpSourceMachineImages(ImageFilterOptions.getInstance());
-        for(MachineImage image : list){
-            if(image.getProviderMachineImageId().equals(imageId)){
-                return image;
+            list = (ArrayList<MachineImage>) listOpSourceMachineImages(ImageFilterOptions.getInstance());
+            for(MachineImage image : list){
+                if(image.getProviderMachineImageId().equals(imageId)){
+                    return image;
+                }
             }
-        }
 
-        return null;
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Nonnull
@@ -143,7 +150,7 @@ public class ServerImage extends AbstractImageSupport {
         return arch;
     }
     
-    private void guessSoftware(MachineImage image) {
+    private @Nonnull String guessSoftware(MachineImage image) {
         String str = (image.getName() + " " + image.getDescription()).toLowerCase();
         StringBuilder software = new StringBuilder();
         boolean comma = false;
@@ -163,56 +170,62 @@ public class ServerImage extends AbstractImageSupport {
             }
             comma = true;
         }
-        image.setSoftware(software.toString());
+        return software.toString();
     }
 
     @Override
     protected @Nonnull MachineImage capture(@Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> task) throws CloudException, InternalException {
-        String vmId = options.getVirtualMachineId();
+        APITrace.begin(provider, "Image.capture");
+        try {
+            String vmId = options.getVirtualMachineId();
 
-        if( vmId == null ) {
-            throw new CloudException("No VM ID was specified");
-        }
-        @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
+            if( vmId == null ) {
+                throw new CloudException("No VM ID was specified");
+            }
+            @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
 
-        if( vm != null ) {
-            throw new CloudException("No such virtual machine: " + vmId);
+            if( vm != null ) {
+                throw new CloudException("No such virtual machine: " + vmId);
+            }
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+            parameters.put(0, param);
+
+            param = new Param(vmId, null);
+            parameters.put(1, param);
+
+            param = new Param(CREATE_IMAGE, options.getName());
+            parameters.put(2, param);
+
+            // Can not use space in the url
+            param = new Param("desc", options.getDescription().replace(" ", "_"));
+            parameters.put(3, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+
+            if(method.parseRequestResult("Imaging", method.invoke(), "result", "resultDetail")){
+                //First check the pending images, because it is mostly being checked by customers
+                ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
+                for(MachineImage image : list){
+                    if(image.getName().equals(options.getName())){
+                        return image;
+                    }
+                }
+                //Check deployed Image
+                list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
+                for(MachineImage image : list){
+                    if(image.getName().equals(options.getName())){
+                        return image;
+                    }
+                }
+            }
+            throw new CloudException("No image, no error");
         }
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-    	parameters.put(0, param);
-    	   	
-        param = new Param(vmId, null);
-    	parameters.put(1, param);
-    	
-        param = new Param(CREATE_IMAGE, options.getName());
-    	parameters.put(2, param);
-    	
-    	// Can not use space in the url
-        param = new Param("desc", options.getDescription().replace(" ", "_"));
-      	parameters.put(3, param);
-    
-    	OpSourceMethod method = new OpSourceMethod(provider,    			
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-    	
-    	if(method.parseRequestResult("Imaging", method.invoke(), "result", "resultDetail")){
-    	   	//First check the pending images, because it is mostly being checked by customers
-        	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
-        	for(MachineImage image : list){
-        		if(image.getName().equals(options.getName())){
-        			return image;
-        		}    		
-        	}
-        	//Check deployed Image
-        	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
-        	for(MachineImage image : list){
-        		if(image.getName().equals(options.getName())){
-        			return image;
-        		}    		
-        	}    		
-    	}
-        throw new CloudException("No image, no error");
+        finally {
+            APITrace.end();
+        }
     }
     
     @Override
@@ -232,34 +245,40 @@ public class ServerImage extends AbstractImageSupport {
     @Nonnull
     @Override
     public Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
-        if( options == null || options.getAccountNumber() == null ) {
-            ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
+        APITrace.begin(provider, "Image.listImages");
+        try {
+            if( options == null || options.getAccountNumber() == null ) {
+                ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
 
-            ArrayList<MachineImage> list =  (ArrayList<MachineImage>) listCustomerMachineImages(options);
-            if(list != null){
-                allList.addAll(list);
+                ArrayList<MachineImage> list =  (ArrayList<MachineImage>) listCustomerMachineImages(options);
+                if(list != null){
+                    allList.addAll(list);
+                }
+                /** Only list the private image */
+
+                /**
+                 list = (ArrayList<MachineImage>) listOpSourceMachineImages();
+                 if(list != null){
+                 allList.addAll(list);
+                 }*/
+
+                return allList;
             }
-            /** Only list the private image */
+            else {
+                String account = options.getAccountNumber();
+                ProviderContext ctx = getProvider().getContext();
 
-            /**
-             list = (ArrayList<MachineImage>) listOpSourceMachineImages();
-             if(list != null){
-             allList.addAll(list);
-             }*/
-
-            return allList;
+                if( ctx == null ) {
+                    throw new CloudException("No context was set for this request");
+                }
+                if( account == null || account.equals(ctx.getAccountNumber()) ) {
+                    return listCustomerMachineImages(options);
+                }
+                return listOpSourceMachineImages(options);
+            }
         }
-        else {
-            String account = options.getAccountNumber();
-            ProviderContext ctx = getProvider().getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            if( account == null || account.equals(ctx.getAccountNumber()) ) {
-                return listCustomerMachineImages(options);
-            }
-            return listOpSourceMachineImages(options);
+        finally {
+            APITrace.end();
         }
     }
 
@@ -365,42 +384,44 @@ public class ServerImage extends AbstractImageSupport {
     
     
     public Iterable<MachineImage> listOpSourceMachineImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
-        if( logger.isTraceEnabled() ) {
-        	logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
-        }
-    	
-    	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
-    	
-    	/** Get OpSource public Image */
-    	HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
-    	Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
-    	parameters.put(0, param);
-    	
-    	param = new Param(provider.getDefaultRegionId(), null);
-    	parameters.put(1, param);
-    
-    	OpSourceMethod method = new OpSourceMethod(provider,
-    						provider.buildUrl(null, false, parameters),
-    						provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-        
-    	Document doc = method.invoke();
-    	
-        NodeList matches = doc.getElementsByTagName(OpSource_IMAGE_TAG);
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
-            
-            MachineImage image = toImage(node,false,false, "");
-            
-            if( image != null && (options == null || options.matches(image)) ) {
-            	list.add(image);
-            }
-        }        
+        APITrace.begin(provider, "Image.listOpSourceMachineImages");
+        try {
+            ArrayList<MachineImage> list = new ArrayList<MachineImage>();
 
-        if( logger.isTraceEnabled() ) {
-        	logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
-        }    	
-  
-        return list;
+            /** Get OpSource public Image */
+            HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
+            parameters.put(0, param);
+
+            param = new Param(provider.getDefaultRegionId(), null);
+            parameters.put(1, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                                provider.buildUrl(null, false, parameters),
+                                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+
+            Document doc = method.invoke();
+
+            NodeList matches = doc.getElementsByTagName(OpSource_IMAGE_TAG);
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
+
+                MachineImage image = toImage(node,false,false, "");
+
+                if( image != null && (options == null || options.matches(image)) ) {
+                    list.add(image);
+                }
+            }
+
+            if( logger.isTraceEnabled() ) {
+                logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
+            }
+
+            return list;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
 
@@ -417,7 +438,7 @@ public class ServerImage extends AbstractImageSupport {
     }
 
     @Override
-    public Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
+    public @Nonnull Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
         ArrayList<MachineImageFormat> list = new  ArrayList<MachineImageFormat>();
         list.add(MachineImageFormat.OVF);
         list.add(MachineImageFormat.VMDK);
@@ -428,48 +449,60 @@ public class ServerImage extends AbstractImageSupport {
 
     @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException{
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
-        parameters.put(0, param);
-        param = new Param(providerImageId, null);
-        parameters.put(1, param);
-        OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-        method.requestResult("Removing image",method.invoke());
+        APITrace.begin(provider, "Image.remove");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
+            parameters.put(0, param);
+            param = new Param(providerImageId, null);
+            parameters.put(1, param);
+            OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+            method.requestResult("Removing image",method.invoke());
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
-    public MachineImage searchImage(@Nullable Platform platform, @Nullable Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
-        ImageFilterOptions options = ImageFilterOptions.getInstance();
+    public @Nullable MachineImage searchImage(@Nullable Platform platform, @Nullable Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
+        APITrace.begin(provider, "Image.searchImage");
+        try {
+            ImageFilterOptions options = ImageFilterOptions.getInstance();
 
-        if( platform != null ) {
-            options.onPlatform(platform);
-        }
-        if( architecture != null ) {
-            options.withArchitecture(architecture);
-        }
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages(options);
-     
-        for( MachineImage img: images) {        	
-            
-            if( img != null ) {
-                if(architecture == null || !architecture.equals(img.getArchitecture()) ) {
-                    continue;
-                }
-                if((platform == null) || !platform.equals(Platform.UNKNOWN) ) {
-                   continue;
-                }
-                if(img.getTag("cpuCount") == null || img.getTag("memory") == null){
-                	continue;
-                }
-                
-            	int currentCPU = Integer.valueOf((String) img.getTag("cpuCount"));
-        		int currentMemory = Integer.valueOf((String) img.getTag("memory"));
-        	
-                if(currentCPU == cpuCount && currentMemory == memoryInMb){
-                	return img;                	
-                } 
+            if( platform != null ) {
+                options.onPlatform(platform);
             }
+            if( architecture != null ) {
+                options.withArchitecture(architecture);
+            }
+            ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages(options);
+
+            for( MachineImage img: images) {
+
+                if( img != null ) {
+                    if(architecture == null || !architecture.equals(img.getArchitecture()) ) {
+                        continue;
+                    }
+                    if((platform == null) || !platform.equals(Platform.UNKNOWN) ) {
+                       continue;
+                    }
+                    if(img.getTag("cpuCount") == null || img.getTag("memory") == null){
+                        continue;
+                    }
+
+                    int currentCPU = Integer.valueOf((String) img.getTag("cpuCount"));
+                    int currentMemory = Integer.valueOf((String) img.getTag("memory"));
+
+                    if(currentCPU == cpuCount && currentMemory == memoryInMb){
+                        return img;
+                    }
+                }
+            }
+            return null;
         }
-        return null;    	
+        finally {
+            APITrace.end();
+        }
     }
 
     @Nonnull
@@ -511,30 +544,19 @@ public class ServerImage extends AbstractImageSupport {
     }
 
     private MachineImage toImage(Node node, boolean isCustomerDeployed, boolean isPending, String nameSpace) throws CloudException, InternalException {
-        Architecture bestArchitectureGuess = Architecture.I64;
-        MachineImage image = new MachineImage();
-        
-        HashMap<String,String> properties = new HashMap<String,String>();
-        image.setTags(properties);
-        
+        HashMap<String,String> tags = new HashMap<String, String>();
+        String ownerId = provider.getContext().getAccountNumber();
         NodeList attributes = node.getChildNodes();
-              
-        if(isCustomerDeployed){
-        	
-        	image.setProviderOwnerId(provider.getContext().getAccountNumber());
-        	
-        }else{
-        	/** Default owner is opsource */        	  
-            image.setProviderOwnerId(provider.getCloudName());        	
+        Architecture bestArchitectureGuess = null;
+
+        if( !isCustomerDeployed ) {
+            ownerId = "--public--";
         }
-       
-        image.setType(MachineImageType.STORAGE);
-        if(isPending){
-        	image.setCurrentState(MachineImageState.PENDING);
-        }else{
-        	image.setCurrentState(MachineImageState.ACTIVE);
-        }
-        
+        MachineImageState currentState = isPending ? MachineImageState.PENDING : MachineImageState.ACTIVE;
+        String imageId = null, imageName = null, description = null, regionId = null, software = "";
+        Platform platform = null;
+        long created = 0L;
+
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             
@@ -554,26 +576,30 @@ public class ServerImage extends AbstractImageSupport {
             if(!nameSpace.equals("")) nameSpaceString = nameSpace + ":";
 
             if( name.equals(nameSpaceString + "id") ) {
-                image.setProviderMachineImageId(value);
+                imageId = value;
             }else if(name.equals(nameSpaceString + "resourcePath") && value != null ){
-            	image.getTags().put("resourcePath", value);
+            	tags.put("resourcePath", value);
             }            
             else if( name.equals(nameSpaceString + "name") ) {
-                image.setName(value);
-                if(  value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
-                    bestArchitectureGuess = Architecture.I64;
-                }
-                else if(value.contains("x32") ) {
-                    bestArchitectureGuess = Architecture.I32;
+                imageName = value;
+                if( bestArchitectureGuess == null ) {
+                    if(  value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
+                        bestArchitectureGuess = Architecture.I64;
+                    }
+                    else if(value.contains("x32") ) {
+                        bestArchitectureGuess = Architecture.I32;
+                    }
                 }
             }
             else if( name.equals(nameSpaceString + "description") ) {
-                image.setDescription(value);
-                if( value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
-                    bestArchitectureGuess = Architecture.I64;
-                }
-                else if( value.contains("x32") ||  value.contains("32-bit") ||  value.contains("32 bit")) {
-                    bestArchitectureGuess = Architecture.I32;
+                description = value;
+                if( bestArchitectureGuess == null ) {
+                    if( value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
+                        bestArchitectureGuess = Architecture.I64;
+                    }
+                    else if( value.contains("x32") ||  value.contains("32-bit") ||  value.contains("32 bit")) {
+                        bestArchitectureGuess = Architecture.I32;
+                    }
                 }
             }
             else if( name.equals(nameSpaceString + "machineSpecification") ) {
@@ -595,14 +621,14 @@ public class ServerImage extends AbstractImageSupport {
 		                    	 osValue = os.getFirstChild().getNodeValue();
 		                     }
 		                     else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-			                     image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));			                       
+			                     platform = Platform.guess(os.getFirstChild().getNodeValue());
 		                     }
 		                     else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
 		                    	 
-		                    	 image.getTags().put("cpuCount", os.getFirstChild().getNodeValue());
+		                    	 tags.put("cpuCount", os.getFirstChild().getNodeValue());
 		                     }  
 		                     else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-		                    	 image.getTags().put("memory", os.getFirstChild().getNodeValue());
+		                    	 tags.put("memory", os.getFirstChild().getNodeValue());
 		                     }
 		                     
 		                     if( osValue != null ) {
@@ -630,15 +656,13 @@ public class ServerImage extends AbstractImageSupport {
 	                	 osValue = os.getFirstChild().getNodeValue();
 	                 }
 	                 else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-	                     image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));			                       
+	                     platform = Platform.guess(os.getFirstChild().getNodeValue());
 	                 }
 	                 else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
-	                	 
-	                	 image.getTags().put("cpuCount", os.getFirstChild().getNodeValue());
+	                	 tags.put("cpuCount", os.getFirstChild().getNodeValue());
 	                 }  
 	                 else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-	                   
-	                	 image.getTags().put("memory", os.getFirstChild().getNodeValue());
+	                	 tags.put("memory", os.getFirstChild().getNodeValue());
 	                 }
 	                 	                           	
 	           		 if( osValue != null  ) {
@@ -646,7 +670,7 @@ public class ServerImage extends AbstractImageSupport {
 	           		 }
 	           		 
 	           		 if( osValue != null ) {	           			 
-	           			 image.setPlatform(Platform.guess(osValue));	                    
+	           			 platform = Platform.guess(osValue);
 	           		 }           		 
            	 	}            	
             
@@ -655,27 +679,27 @@ public class ServerImage extends AbstractImageSupport {
         	   if(! provider.getDefaultRegionId().equals(value)){
         		  return null;  
         	   }
-        	   image.setProviderRegionId(value);
+        	   regionId = value;
         	   
            }
            else if( name.equals(nameSpaceString + "cpuCount") && value != null ) {
         	
-        	   image.getTags().put("cpuCount", value);
+        	   tags.put("cpuCount", value);
  
            }  
            else if( name.equals(nameSpaceString + "memory") && value != null ) {
-        	   image.getTags().put("memory", value);
+        	   tags.put("memory", value);
            } 
            else if( name.equals("created") ) {
                // 2010-06-29T20:49:28+1000
                // TODO: implement when dasein cloud supports template creation timestamps
-           	
+
            }
            else if( name.equals(nameSpaceString + "osStorage") ) {
               // TODO
            }
            else if( name.equals(nameSpaceString + "location") ) {
-            	image.setProviderRegionId(value);
+            	regionId = value;
            }           
            else if( name.equals(nameSpaceString + "deployedTime") ) {
                 // 2010-06-29T20:49:28+1000
@@ -683,30 +707,34 @@ public class ServerImage extends AbstractImageSupport {
            }else if( name.equals(nameSpaceString + "sourceServerId") ) {
             	//TODO
            }else if( name.equals(nameSpaceString + "softwareLabel") ) {
-            	image.setSoftware(value);
+            	software = value;
            }
             
         }
-        if(image.getDescription() == null || image.getDescription().equals("")){
-            image.setDescription(image.getName());
+        if( imageId == null || !regionId.equals(provider.getContext().getRegionId()) ) {
+            return null;
         }
-        if( image.getPlatform() == null && image.getName() != null ) {
-            image.setPlatform(Platform.guess(image.getName()));            
+        if( imageName == null || imageName.equals("") ) {
+            imageName = imageId;
         }
-        if( image.getPlatform().equals(Platform.UNKNOWN) && image.getDescription()!= null ) {
-            image.setPlatform(Platform.guess(image.getDescription()));            
+        if( description == null || description.equals("") ) {
+            description = imageName;
         }
-        if(image.getPlatform().equals(Platform.UNKNOWN)){
-        	if(image.getName().contains("Win2008") || image.getName().contains("Win2003")){
-        		image.setPlatform(Platform.WINDOWS);        		
+        if( platform == null || platform.equals(Platform.UNKNOWN) ) {
+            platform = Platform.guess(imageName + " " + description);
+        }
+        if( platform.equals(Platform.UNKNOWN) ) {
+        	if( imageName.contains("Win2008") || imageName.contains("Win2003")){
+        		platform = Platform.WINDOWS;
         	}        	
         }
-        if( image.getArchitecture() == null ) {
-            image.setArchitecture(bestArchitectureGuess);
+        if( bestArchitectureGuess == null ) {
+            bestArchitectureGuess = Architecture.I64;
         }
-        if( image.getSoftware() == null ) {
-        	guessSoftware(image);        	
-        }
+        MachineImage image = MachineImage.getMachineImageInstance(ownerId, regionId, imageId, currentState, imageName,  description, bestArchitectureGuess, platform).createdAt(created);
+
+        image.withSoftware(guessSoftware(image));
+        image.setTags(tags);
         return image;       
     }
 }
