@@ -51,6 +51,7 @@ import org.dasein.cloud.network.VLAN;
 import org.dasein.cloud.network.VLANSupport;
 import org.dasein.cloud.opsource.compute.OpSourceComputeServices;
 import org.dasein.cloud.opsource.network.OpSourceNetworkServices;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 
 import org.w3c.dom.NodeList;
@@ -525,42 +526,48 @@ public class OpSource extends AbstractCloud {
             logger.trace("enter - " + OpSource.class.getName() + ".textContext()");
         }
         try {
+            APITrace.begin(this, "Cloud.testContext");
             try {
-                ProviderContext ctx = getContext();
-
-                if( ctx == null ) {
-                    return null;
-                }
-                String pk = new String(ctx.getAccessPublic(), "utf-8");
-
-        		//OpSourceMethod method = new OpSourceMethod(this, getRegionServiceUrl(), getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-                
                 try {
-            		//Document doc = method.invoke();
-                    //HashMap<Integer, Param> parameters = (HashMap)getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null);
-                    Document doc = CallCache.getInstance().getAPICall(LOCATION_BASE_PATH, this, new HashMap<Integer, Param>(), getRegionServiceUrl());
-            		if( logger.isDebugEnabled()) {
-            			logger.debug("Found regions: "+ convertDomToString(doc));
-            		}
-                    return pk;
-                }
-                catch( CloudException e ) {
-                    if( e.getErrorType().equals(CloudErrorType.AUTHENTICATION) ) {
+                    ProviderContext ctx = getContext();
+
+                    if( ctx == null ) {
                         return null;
                     }
-                    logger.warn("Cloud error testing OpSource context: " + e.getMessage());
-                    if( logger.isTraceEnabled() ) {
-                        e.printStackTrace();
+                    String pk = new String(ctx.getAccessPublic(), "utf-8");
+
+                    OpSourceMethod method = new OpSourceMethod(this, getRegionServiceUrl(), getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+
+                    try {
+                        Document doc = method.invoke();
+                        //HashMap<Integer, Param> parameters = (HashMap)getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null);
+
+                        if( logger.isDebugEnabled()) {
+                            logger.debug("Found regions: "+ convertDomToString(doc));
+                        }
+                        return pk;
                     }
+                    catch( CloudException e ) {
+                        if( e.getErrorType().equals(CloudErrorType.AUTHENTICATION) ) {
+                            return null;
+                        }
+                        logger.warn("Cloud error testing OpSource context: " + e.getMessage());
+                        if( logger.isTraceEnabled() ) {
+                            e.printStackTrace();
+                        }
+                    }
+                    return null;
                 }
-                return null;
+                catch( Throwable t ) {
+                    logger.warn("Failed to test OpSource connection context: " + t.getMessage());
+                    if( logger.isTraceEnabled() ) {
+                        t.printStackTrace();
+                    }
+                    return null;
+                }
             }
-            catch( Throwable t ) {
-                logger.warn("Failed to test OpSource connection context: " + t.getMessage());
-                if( logger.isTraceEnabled() ) {
-                    t.printStackTrace();
-                }
-                return null;
+            finally {
+                APITrace.end();
             }
         }
         finally {
