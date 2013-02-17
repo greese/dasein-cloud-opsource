@@ -31,7 +31,7 @@ public class OpSourceNetworkServices extends AbstractNetworkServices {
     public OpSourceNetworkServices(@Nonnull OpSource cloud) { this.cloud = cloud; }
     
     @Override 
-    public @Nullable SecurityGroup getFirewallSupport() {
+    public @Nonnull SecurityGroup getFirewallSupport() {
        return new SecurityGroup(cloud);      
     }
     
@@ -46,7 +46,7 @@ public class OpSourceNetworkServices extends AbstractNetworkServices {
     }
     
     @Override
-    public @Nullable Network getVlanSupport() {
+    public @Nonnull Network getVlanSupport() {
     	return new Network(cloud);      
     }
 }

@@ -31,7 +31,7 @@ import java.util.HashMap;
  * limitations under the License.
  * ====================================================================
  */
-
+@Deprecated
 public class CallCache {
     Logger wire = OpSource.getLogger(CallCache.class);
 
