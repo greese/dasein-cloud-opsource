@@ -337,22 +337,18 @@ config
         return Collections.emptyList();
     }
 
-
     public Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly, String networkId) throws InternalException, CloudException {
 		  
 		ArrayList<IpAddress> addresses = new ArrayList<IpAddress>();
    	
     	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param("networkWithLocation", null);
-        
         parameters.put(0, param);
         
         param = new Param(networkId, null);
-            
         parameters.put(1, param);
            	
        	param = new Param("config", null);
-        
        	parameters.put(2, param);
         	
        	OpSourceMethod method = new OpSourceMethod(provider,

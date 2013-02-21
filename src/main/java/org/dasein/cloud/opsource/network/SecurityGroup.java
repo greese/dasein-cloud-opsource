@@ -205,8 +205,14 @@ public class SecurityGroup implements FirewallSupport {
 
             Element port = doc.createElement("port1");
             port.setTextContent(String.valueOf(beginPort));
+
             portRange.appendChild(portRangeType);
             portRange.appendChild(port);
+            if(beginPort != endPort){
+                Element port2 = doc.createElement("port2");
+                port.setTextContent(String.valueOf(endPort));
+                portRange.appendChild(port2);
+            }
         }
         else{
             portRangeType.setTextContent("ALL");
@@ -505,8 +511,8 @@ public class SecurityGroup implements FirewallSupport {
         Param param = new Param("networkWithLocation", null);
     	parameters.put(0, param);
 
-    	param = new Param(provider.getDefaultRegionId(), null);
-      	parameters.put(1, param);
+    	//param = new Param(provider.getDefaultRegionId(), null);
+      	//parameters.put(1, param);
 
     	OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
@@ -801,7 +807,7 @@ public class SecurityGroup implements FirewallSupport {
             	
             	if(value.equalsIgnoreCase("TCP")){
             		protocol = Protocol.TCP;
-            	}else if (value.equalsIgnoreCase("UPD")){
+            	}else if (value.equalsIgnoreCase("UDP")){
             		protocol = Protocol.UDP;
             	}else if (value.equalsIgnoreCase("ICMP") ){
             		protocol = Protocol.ICMP;

@@ -678,7 +678,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 
                 if( currentCPU != targetCPU || currentMemory != targetMemory ) {
                     //long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 20L);
-                    long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 60L);
+                    long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 90L);
 
                     Exception currentException = null;
 
