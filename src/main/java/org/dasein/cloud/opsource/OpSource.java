@@ -118,6 +118,8 @@ public class OpSource extends AbstractCloud {
 	final String OpSource_RootAxcess_Name = "RootAxcess Cloud";
 	final String OpSource_OPTiMO_Name = "OPTiMO Cloud Solutions";
 	final String OpSource_PWW_Name = "PWW Cloud Connect";
+    final String OpSource_IS_Name = "IS Public Cloud";
+    final String OpSource_Concentric_Name = "Concentric Cloud Solutions";
 	
 	final String OpSource_OrgId_Key = "orgId";
 	final String OpSource_VERSION = "/oec/0.9";
@@ -126,6 +128,8 @@ public class OpSource extends AbstractCloud {
 	public String defaultVlanId = null;
 	private String defaultRegionId = null;
 	private String defaultAdminPasswordForVM = null;
+
+    private HashMap<String, String> region2EndpointMap = new HashMap<String, String>();
 	
 	public String buildUrl(String command, boolean isDeployed, Map<Integer, Param> parameters) throws InternalException, CloudException {
 		StringBuilder str = new StringBuilder();
@@ -212,20 +216,19 @@ public class OpSource extends AbstractCloud {
 	}
 	
 	public String getVlanResourcePathFromVlanId(@Nonnull String vlanId) throws InternalException, CloudException{
-		return "/oec/"+ getOrgId()+"/network/" + vlanId;		
+		return "/oec/"+ getOrgId()+"/network/" + vlanId;
 	}
-	
-	/**
-	 * Get vlanResourcePath
-	 */	
+
 	public String getVlanIdFromVlanResourcePath(@Nonnull String vlanResourcePath) throws InternalException, CloudException{
 		
 		return  vlanResourcePath.substring(vlanResourcePath.lastIndexOf("/")+1);
 	}
+
 	public String getImageIdFromImageResourcePath(@Nonnull String imageResourcePath) throws InternalException, CloudException{
 		
 		return  imageResourcePath.substring(imageResourcePath.lastIndexOf("/")+1);
 	}
+
 	public String getImageResourcePathFromImaged(@Nonnull String imageId) throws InternalException, CloudException{
 		MachineImage image = this.getComputeServices().getImageSupport().getMachineImage(imageId);
 		if(image == null){
@@ -249,6 +252,7 @@ public class OpSource extends AbstractCloud {
 		return defaultRegionId;
 		
 	}
+
 	public String getDefaultVlanId() throws CloudException, InternalException{
 		if(defaultVlanId != null){
 			return defaultVlanId;			
@@ -313,7 +317,6 @@ public class OpSource extends AbstractCloud {
 	}
 	
 	public String getEndpoint(){
-
         String endpoint = getContext().getEndpoint();
         if(endpoint == null){
             return null;
@@ -366,93 +369,101 @@ public class OpSource extends AbstractCloud {
 		return orgId;		
 	}
 
-   public String getBasicUrl() throws CloudException{
-	   String endpoint = this.getContext().getEndpoint();
-	   if(endpoint == null){
-		  throw new CloudException("Endpoint is null !!!");
-	   }
-	   return (endpoint  + OpSource_VERSION);
-   }	
-   
-   public HashMap<String, ArrayList<String>> getProivderEndpointMap(){
-		
-		HashMap<String, ArrayList<String>> map = new HashMap<String, ArrayList<String>>();
-		String providerName = OpSource_OpSource_Name;
-		ArrayList<String> endpointList = new ArrayList<String>();
-		endpointList.add("api.opsourcecloud.net");
-		endpointList.add("euapi.opsourcecloud.net");
-		endpointList.add("auapi.opsourcecloud.net");
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_Dimension_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("api-na.dimensiondata.com");
-		endpointList.add("api-eu.dimensiondata.com");
-		endpointList.add("api-au.dimensiondata.com");
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_BlueFire_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("usapi.bluefirecloud.com.au");
-		endpointList.add("euapi.bluefirecloud.com.au");	
-		endpointList.add("auapi.bluefirecloud.com.au");
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_NTTA_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("cloudapi.nttamerica.com");
-		endpointList.add("eucloudapi.nttamerica.com");
-		endpointList.add("aucloudapi.nttamerica.com");
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_NTTE_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("ntteapi.opsourcecloud.net");
-		//The same as OpSource cloud?
-		endpointList.add("euapi.opsourcecloud.net");
-		//The same as OpSource cloud?
-		endpointList.add("auapi.opsourcecloud.net");		
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_Tenzing_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("api.cloud.tenzing.com");		
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_Tenzing_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("api.cloud.tenzing.com");		
-		map.put(providerName, endpointList);
-				
-		providerName = OpSource_Alvea_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("iaasapi.alvea-services.com");		
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_Alvea_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("iaasapi.alvea-services.com");		
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_RootAxcess_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("iaasapi.alvea-services.com");		
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_OPTiMO_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("api.optimo-cloud.com");		
-		map.put(providerName, endpointList);
-		
-		providerName = OpSource_PWW_Name;
-		endpointList = new ArrayList<String>();
-		endpointList.add("api.pwwcloudconnect.net");		
-		map.put(providerName, endpointList);	
-		
-		return map;	
-   }	
-	
-	@Override
+    public String getBasicUrl() throws CloudException{
+        String endpoint = this.getContext().getEndpoint();
+        if(endpoint == null){
+            throw new CloudException("Endpoint is null !!!");
+        }
+        return (endpoint  + OpSource_VERSION);
+    }
+
+    public HashMap<String, ArrayList<String>> getProivderEndpointMap(){
+        HashMap<String, ArrayList<String>> map = new HashMap<String, ArrayList<String>>();
+        String providerName = OpSource_OpSource_Name;
+        ArrayList<String> endpointList = new ArrayList<String>();
+        endpointList.add("api.opsourcecloud.net");
+        endpointList.add("euapi.opsourcecloud.net");
+        endpointList.add("auapi.opsourcecloud.net");
+        endpointList.add("afapi.opsourcecloud.net");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_Dimension_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("api-na.dimensiondata.com");
+        endpointList.add("api-eu.dimensiondata.com");
+        endpointList.add("api-au.dimensiondata.com");
+        endpointList.add("api-mea.dimensiondata.com");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_BlueFire_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("usapi.bluefirecloud.com.au");
+        endpointList.add("euapi.bluefirecloud.com.au");
+        endpointList.add("auapi.bluefirecloud.com.au");
+        endpointList.add("afapi.bluefirecloud.com.au");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_NTTA_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("cloudapi.nttamerica.com");
+        endpointList.add("eucloudapi.nttamerica.com");
+        endpointList.add("aucloudapi.nttamerica.com");
+        endpointList.add("sacloudapi.nttamerica.com");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_NTTE_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("ntteapi.opsourcecloud.net");
+        endpointList.add("euapi.opsourcecloud.net");
+        endpointList.add("auapi.opsourcecloud.net");
+        endpointList.add("afapi.opsourcecloud.net");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_IS_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("usapi.cloud.is.co.za");
+        endpointList.add("euapi.cloud.is.co.za");
+        endpointList.add("auapi.cloud.is.co.za");
+        endpointList.add("meapi.cloud.is.co.za");
+
+        providerName = OpSource_Concentric_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("api.concentric.com");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_Tenzing_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("api.cloud.tenzing.com");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_Alvea_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("iaasapi.alvea-services.com");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_RootAxcess_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("api.rootaxcesscloud.com");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_OPTiMO_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("api.optimo-cloud.com");
+        map.put(providerName, endpointList);
+
+        providerName = OpSource_PWW_Name;
+        endpointList = new ArrayList<String>();
+        endpointList.add("api.pwwcloudconnect.net");
+        map.put(providerName, endpointList);
+
+        return map;
+    }
+
+    public void setRegionEndpoint(String region, String endpoint){
+        region2EndpointMap.put(region, endpoint);
+    }
+
+    @Override
 	public String getCloudName() {
        ProviderContext ctx = getContext();
 
