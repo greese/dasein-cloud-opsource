@@ -51,22 +51,22 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class IpAddressImplement implements IpAddressSupport { 
+public class IpAddressImplement implements IpAddressSupport {
 
-    
+
     private OpSource provider;
-    
+
     final int Maximum_Static_Public_IP = 8;
     final int Minimum_Static_Public_IP = 1;
-    
+
     static public final Logger logger = Logger.getLogger(IpAddressImplement.class);
-    
-    
+
+
     public IpAddressImplement(OpSource provider) {
         this.provider = provider;
     }
-    
-    
+
+
     @Override
     public void assign(@Nonnull String addressId, @Nonnull String toServerId) throws InternalException, CloudException {
         APITrace.begin(provider, "IpAddress.assign");
@@ -127,9 +127,9 @@ public class IpAddressImplement implements IpAddressSupport {
     }
 
     public @Nonnull String forward(@Nonnull String addressId, int publicPort, @Nonnull Protocol protocol, int privatePort, @Nonnull String onServerId) throws InternalException, CloudException {
-    	throw new OperationNotSupportedException("Not support");
+        throw new OperationNotSupportedException("Not support");
     }
-  
+
     public @Nullable IpAddress getIpAddress(@Nonnull String addressId) throws InternalException, CloudException {
         APITrace.begin(provider, "IpAddress.getIpAddress");
         try {
@@ -148,27 +148,27 @@ public class IpAddressImplement implements IpAddressSupport {
             APITrace.end();
         }
     }
-    
+
     public NatRule getNatRule(String ip, String networkId) throws CloudException, InternalException{
-    	
-    	ArrayList<NatRule> list;
-    	if(networkId == null){
-    		list = (ArrayList<NatRule>) this.listNatRule();
-    	}else{
-    		list = (ArrayList<NatRule>) this.listNatRule(networkId);
-    	}
-    	
-    	if(list == null){
-    		return null;
-    	}
-    	for(NatRule rule : list){
-    		if(rule.getNatIp().equals(ip) || rule.getSourceIp().equals(ip)){
-    			return rule;    			
-    		}  		
-    	}    	
-    	return null;
+
+        ArrayList<NatRule> list;
+        if(networkId == null){
+            list = (ArrayList<NatRule>) this.listNatRule();
+        }else{
+            list = (ArrayList<NatRule>) this.listNatRule(networkId);
+        }
+
+        if(list == null){
+            return null;
+        }
+        for(NatRule rule : list){
+            if(rule.getNatIp().equals(ip) || rule.getSourceIp().equals(ip)){
+                return rule;
+            }
+        }
+        return null;
     }
-    
+
     public @Nonnull String getProviderTermForIpAddress(@Nonnull Locale locale) {
         return "IP address";
     }
@@ -208,7 +208,7 @@ public class IpAddressImplement implements IpAddressSupport {
     @Override
     @Deprecated
     public boolean isRequestable(@Nonnull AddressType type) {
-    	return type.equals(AddressType.PUBLIC);
+        return type.equals(AddressType.PUBLIC);
     }
 
     @Override
@@ -218,18 +218,18 @@ public class IpAddressImplement implements IpAddressSupport {
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
-    	return true;
+        return true;
     }
     /**
      * https://<Cloud API URL>/oec/0.9/{org-id}/networkWithLocation/{networkid}/
-config
+     config
      */
 
     @Override
     @Deprecated
     public @Nonnull Iterable<org.dasein.cloud.network.IpAddress> listPrivateIpPool(boolean unassignedOnly) throws InternalException, CloudException {
-    	return Collections.emptyList();
-    	//As the private IP can not be assigned to a specific server, no need to list
+        return Collections.emptyList();
+        //As the private IP can not be assigned to a specific server, no need to list
     	/*     
     	ArrayList<org.dasein.cloud.network.IpAddress> addresses = new ArrayList<org.dasein.cloud.network.IpAddress>();
         
@@ -313,13 +313,13 @@ config
           
         }
         return addresses;*/
-       
+
     }
-    
-    
-	@Override
+
+
+    @Override
     @Deprecated
-	public @Nonnull Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly) throws InternalException, CloudException {
+    public @Nonnull Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly) throws InternalException, CloudException {
         APITrace.begin(provider, "IpAddress.listPublicIpPool");
         try {
             ArrayList<IpAddress> addresses = new ArrayList<IpAddress>();
@@ -358,55 +358,7 @@ config
     }
 
     public Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly, String networkId) throws InternalException, CloudException {
-<<<<<<< HEAD
-		  
-		ArrayList<IpAddress> addresses = new ArrayList<IpAddress>();
-   	
-    	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param("networkWithLocation", null);
-        parameters.put(0, param);
-        
-        param = new Param(networkId, null);
-        parameters.put(1, param);
-           	
-       	param = new Param("config", null);
-       	parameters.put(2, param);
-        	
-       	OpSourceMethod method = new OpSourceMethod(provider,
-       			provider.buildUrl(null,true, parameters),
-       			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-         	
-       	Document doc = method.invoke();
-        //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
-
-        String sNS = "";
-        try{
-            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
-        }
-        catch(IndexOutOfBoundsException ex){}
-        NodeList matches = doc.getElementsByTagName(sNS + "publicIps");
-        if(matches != null){
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node item = matches.item(i); 
-                if(item.getNodeType() == Node.TEXT_NODE) continue;
-                NodeList ipblocks = item.getChildNodes();
-                for(int j = 0;j <ipblocks.getLength(); j++ ){
-                	 Node node = ipblocks.item(j); 
-                	 if(node.getNodeType() == Node.TEXT_NODE) continue;
-                	 if(node.getNodeName().equals(sNS + "IpBlock")){
-                    	ArrayList<IpAddress> list = (ArrayList<IpAddress>) toPublicAddress(node, networkId, sNS);
-                    	if(list == null) continue;         	
-           		
-                		for(org.dasein.cloud.network.IpAddress ip: list){
-                			
-                			if(unassignedOnly && (ip.getProviderLoadBalancerId() != null || ip.getServerId() != null)){
-                				continue;           
-                			}
-                			addresses.add(ip);
-                		}
-                	 }
-=======
-		APITrace.begin(provider, "IpAddress.listPublicIpPool");
+        APITrace.begin(provider, "IpAddress.listPublicIpPool");
         try {
             ArrayList<IpAddress> addresses = new ArrayList<IpAddress>();
 
@@ -434,9 +386,7 @@ config
             try{
                 sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
             }
-            catch(IndexOutOfBoundsException ignore){
-                // ignore
-            }
+            catch(IndexOutOfBoundsException ex){}
             NodeList matches = doc.getElementsByTagName(sNS + "publicIps");
             if(matches != null){
                 for( int i=0; i<matches.getLength(); i++ ) {
@@ -444,9 +394,9 @@ config
                     if(item.getNodeType() == Node.TEXT_NODE) continue;
                     NodeList ipblocks = item.getChildNodes();
                     for(int j = 0;j <ipblocks.getLength(); j++ ){
-                         Node node = ipblocks.item(j);
-                         if(node.getNodeType() == Node.TEXT_NODE) continue;
-                         if(node.getNodeName().equals(sNS + "IpBlock")){
+                        Node node = ipblocks.item(j);
+                        if(node.getNodeType() == Node.TEXT_NODE) continue;
+                        if(node.getNodeName().equals(sNS + "IpBlock")){
                             ArrayList<IpAddress> list = (ArrayList<IpAddress>) toPublicAddress(node, networkId, sNS);
                             if(list == null) continue;
 
@@ -457,9 +407,8 @@ config
                                 }
                                 addresses.add(ip);
                             }
-                         }
+                        }
                     }
->>>>>>> 4aaadc0f4a72f5b24c51633109c1c9249ed0f20d
                 }
             }
             return addresses;
@@ -484,10 +433,10 @@ config
             APITrace.end();
         }
     }
-    
-    
-	public @Nonnull Collection<IpForwardingRule> listRules(@Nonnull String addressId) throws InternalException, CloudException {
-    	return  Collections.emptyList();
+
+
+    public @Nonnull Collection<IpForwardingRule> listRules(@Nonnull String addressId) throws InternalException, CloudException {
+        return  Collections.emptyList();
     }
 
     @Override
@@ -501,22 +450,22 @@ config
     }
 
     public void releaseFromPool(@Nonnull String addressId) throws InternalException, CloudException {
-    	throw new OperationNotSupportedException("Not support for releasing IP for pool");
+        throw new OperationNotSupportedException("Not support for releasing IP for pool");
     }
-    
-    public Collection<NatRule> listNatRule() throws CloudException, InternalException{
-    	ArrayList<NatRule> list = new ArrayList<NatRule>();
-    	ArrayList<VLAN> networkList = (ArrayList<VLAN>) provider.getNetworkServices().getVlanSupport().listVlans();
 
-        for(VLAN network : networkList){        	
-    	
-        	ArrayList<NatRule> natList = (ArrayList<NatRule>) this.listNatRule(network.getProviderVlanId());
+    public Collection<NatRule> listNatRule() throws CloudException, InternalException{
+        ArrayList<NatRule> list = new ArrayList<NatRule>();
+        ArrayList<VLAN> networkList = (ArrayList<VLAN>) provider.getNetworkServices().getVlanSupport().listVlans();
+
+        for(VLAN network : networkList){
+
+            ArrayList<NatRule> natList = (ArrayList<NatRule>) this.listNatRule(network.getProviderVlanId());
 
             list.addAll(natList);
         }
-		return list;   	
+        return list;
     }
-    
+
     public @Nonnull Collection<NatRule> listNatRule(@Nonnull String networkId) throws CloudException, InternalException{
         APITrace.begin(provider, "IpAddress.listNatRule");
         try {
@@ -561,7 +510,7 @@ config
             APITrace.end();
         }
     }
-    
+
     public void releaseFromServer(@Nonnull String addressId) throws InternalException, CloudException {
         APITrace.begin(provider, "IpAddress.releaseFromServer");
         try {
@@ -593,7 +542,7 @@ config
             APITrace.end();
         }
     }
-    
+
     /**
      * Opsource does not support reserve one IP address
      * But it supports to create a subnet of ip addresses
@@ -602,11 +551,11 @@ config
     @Override
     @Deprecated
     public @Nonnull String request(@Nonnull AddressType addressType) throws InternalException, CloudException {
-    	
-    	if(addressType.equals(AddressType.PRIVATE)){    		
-    		throw new OperationNotSupportedException("OpSource does not support request private IP");        	
-    	}
-    	APITrace.begin(provider, "IpAddress.request");
+
+        if(addressType.equals(AddressType.PRIVATE)){
+            throw new OperationNotSupportedException("OpSource does not support request private IP");
+        }
+        APITrace.begin(provider, "IpAddress.request");
         try {
             //Check currant available IP lists on default network
             ArrayList<IpAddress> list = (ArrayList<IpAddress>) listPublicIpPool(true, provider.getDefaultVlanId());
@@ -655,7 +604,7 @@ config
     }
 
     public void stopForward(@Nonnull String ruleId) throws InternalException, CloudException {
-    	throw new OperationNotSupportedException("Not support for stopForwarding for OpSource");
+        throw new OperationNotSupportedException("Not support for stopForwarding for OpSource");
     }
 
     @Override
@@ -664,57 +613,18 @@ config
     }
 
     private NatRule toNatRule(Node node, String nameSpace){
-    	if(node == null){
-    		return null;
-    	}
-    	NatRule rule = new NatRule();
-    	
-		NodeList attributes = node.getChildNodes();
-	            
-	    for( int i=0; i<attributes.getLength(); i++ ) {
-	         Node n = attributes.item(i);
-	         String name = n.getNodeName();
-	         String value;
-	         
-	         if( n.getChildNodes().getLength() > 0 ) {
-	             value = n.getFirstChild().getNodeValue();
-	         }
-	         else {
-	             continue;
-	         }
-	         if( name.equalsIgnoreCase(nameSpace + "id") ) {
-	             rule.setId(value);
-	         }
-	         else if( name.equalsIgnoreCase(nameSpace + "natIp") ) {
-	        	 rule.setNatIp(value);
-	         }
-	         else if( name.equalsIgnoreCase(nameSpace + "sourceIp") ) {
-	        	 rule.setSourceIp(value);
-	         }
-	     }
-	     if(rule != null && rule.getId() != null 
-	    		 && rule.getNatIp() != null 
-	    		 && rule.getSourceIp() != null){
-	    	 return rule;            	 
-	     }else{
-	    	 return null; 
-	     }	    
-    }
- 
-    private Collection<IpAddress> toPublicAddress(Node node, String networkId, String nameSpace) throws InternalException, CloudException {
-        ArrayList<IpAddress> list = new ArrayList<IpAddress> ();
-                 
-    	IpAddress address = null;
-        NodeList attributes = node.getChildNodes();      
+        if(node == null){
+            return null;
+        }
+        NatRule rule = new NatRule();
 
-        String baseIp = null;
-        int ipSize = 0;
-        
+        NodeList attributes = node.getChildNodes();
+
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node n = attributes.item(i);
-            String name = n.getNodeName().toLowerCase();
+            String name = n.getNodeName();
             String value;
-            
+
             if( n.getChildNodes().getLength() > 0 ) {
                 value = n.getFirstChild().getNodeValue();
             }
@@ -722,65 +632,104 @@ config
                 continue;
             }
             if( name.equalsIgnoreCase(nameSpace + "id") ) {
-            	//
+                rule.setId(value);
+            }
+            else if( name.equalsIgnoreCase(nameSpace + "natIp") ) {
+                rule.setNatIp(value);
+            }
+            else if( name.equalsIgnoreCase(nameSpace + "sourceIp") ) {
+                rule.setSourceIp(value);
+            }
+        }
+        if(rule != null && rule.getId() != null
+                && rule.getNatIp() != null
+                && rule.getSourceIp() != null){
+            return rule;
+        }else{
+            return null;
+        }
+    }
+
+    private Collection<IpAddress> toPublicAddress(Node node, String networkId, String nameSpace) throws InternalException, CloudException {
+        ArrayList<IpAddress> list = new ArrayList<IpAddress> ();
+
+        IpAddress address = null;
+        NodeList attributes = node.getChildNodes();
+
+        String baseIp = null;
+        int ipSize = 0;
+
+        for( int i=0; i<attributes.getLength(); i++ ) {
+            Node n = attributes.item(i);
+            String name = n.getNodeName().toLowerCase();
+            String value;
+
+            if( n.getChildNodes().getLength() > 0 ) {
+                value = n.getFirstChild().getNodeValue();
+            }
+            else {
+                continue;
+            }
+            if( name.equalsIgnoreCase(nameSpace + "id") ) {
+                //
             }
             else if(name.equalsIgnoreCase(nameSpace + "baseIp") ) {
                 baseIp = value;
             }
             else if(name.equalsIgnoreCase(nameSpace + "subnetSize") ) {
-            	ipSize = Integer.valueOf(value);
+                ipSize = Integer.valueOf(value);
             }
             else if( name.equalsIgnoreCase(nameSpace + "networkDefault") ) {
-            	//
-            } 
-        }    
-        
-        if(baseIp != null && ipSize >0 ){
-        	
-        	String prefix = baseIp.substring(0, baseIp.lastIndexOf(".")+1);
-        	int lastValue = Integer.parseInt(baseIp.substring(baseIp.lastIndexOf(".")+1));
-        	        	
-        	LoadBalancers lbSupport = new LoadBalancers(provider);
-        	ArrayList<LoadBalancer> lbs =  (ArrayList<LoadBalancer>) lbSupport.listLoadBalancers(networkId);
-            
-        	ArrayList<VirtualMachine> vms =  (ArrayList<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+                //
+            }
+        }
 
-        	for(int i=0;i < ipSize ; i++){
-        		int lastSection = lastValue + i;
-        		String addressId = prefix + lastSection;
-        		address =  new IpAddress();
+        if(baseIp != null && ipSize >0 ){
+
+            String prefix = baseIp.substring(0, baseIp.lastIndexOf(".")+1);
+            int lastValue = Integer.parseInt(baseIp.substring(baseIp.lastIndexOf(".")+1));
+
+            LoadBalancers lbSupport = new LoadBalancers(provider);
+            ArrayList<LoadBalancer> lbs =  (ArrayList<LoadBalancer>) lbSupport.listLoadBalancers(networkId);
+
+            ArrayList<VirtualMachine> vms =  (ArrayList<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+
+            for(int i=0;i < ipSize ; i++){
+                int lastSection = lastValue + i;
+                String addressId = prefix + lastSection;
+                address =  new IpAddress();
 
                 address.setAddressType(AddressType.PUBLIC);
-        		address.setRegionId(provider.getContext().getRegionId());
+                address.setRegionId(provider.getContext().getRegionId());
 
-        		address.setIpAddressId(addressId);
-        		address.setAddress(addressId);
-        		
-        		//Set LB Id
+                address.setIpAddressId(addressId);
+                address.setAddress(addressId);
+
+                //Set LB Id
                 for(LoadBalancer lb : lbs){
-              	   if(lb.getAddress().equals(addressId)){
-              		 address.setProviderLoadBalancerId(lb.getProviderLoadBalancerId());
-              		 break;
-              	   }
-                 }                
-                
+                    if(lb.getAddress().equals(addressId)){
+                        address.setProviderLoadBalancerId(lb.getProviderLoadBalancerId());
+                        break;
+                    }
+                }
+
                 // Set server Id
                 for( VirtualMachine vm : vms ) {
-                	
-        			String[] addrs = vm.getPublicIpAddresses();	
-        			if(addrs == null) continue;
-        			boolean findServer = false;
-        			for(String publicIp: addrs){
-        				if( publicIp.equals(addressId)) {
-        					address.setServerId(vm.getProviderVirtualMachineId());
-        					findServer = true;
-        					break;
-            	        }
-        			}
-        			if(findServer) break;
-            	}    
-        		list.add(address);      		
-        	}        	       	
+
+                    String[] addrs = vm.getPublicIpAddresses();
+                    if(addrs == null) continue;
+                    boolean findServer = false;
+                    for(String publicIp: addrs){
+                        if( publicIp.equals(addressId)) {
+                            address.setServerId(vm.getProviderVirtualMachineId());
+                            findServer = true;
+                            break;
+                        }
+                    }
+                    if(findServer) break;
+                }
+                list.add(address);
+            }
         }
         return list;
     }
@@ -891,43 +840,43 @@ config
         return (rules.getLength() > 0);
     }
         */
-    
+
     public class NatRule{
-    	String id;
-       	String natIp;
-    	String sourceIp;
-    	String vlanId;
-    	
-    	NatRule(){}
-    	
-    	NatRule(String id, String natIp, String sourceIp){
-    		this.id = id;
-    		this.natIp = natIp;
-    		this.sourceIp = sourceIp;    		
-    	}
-    	public String getId(){
-    		return id;
-    	}
-    	public String getNatIp(){
-    		return this.natIp;
-    	}
-    	public String getSourceIp(){
-    		return this.sourceIp;
-    	}
-    	public void setId(String id){
-    		this.id = id;
-    	}
-    	public void setNatIp(String natIp){
-    		this.natIp = natIp;
-    	}
-    	public void setSourceIp(String sourceIp){
-    		this.sourceIp = sourceIp;
-    	}
-    	public void setVlanId(String vlanId){
-    		this.vlanId = vlanId;
-    	}
-    	public String getVlanId(){
-    		return vlanId;
-    	}  
+        String id;
+        String natIp;
+        String sourceIp;
+        String vlanId;
+
+        NatRule(){}
+
+        NatRule(String id, String natIp, String sourceIp){
+            this.id = id;
+            this.natIp = natIp;
+            this.sourceIp = sourceIp;
+        }
+        public String getId(){
+            return id;
+        }
+        public String getNatIp(){
+            return this.natIp;
+        }
+        public String getSourceIp(){
+            return this.sourceIp;
+        }
+        public void setId(String id){
+            this.id = id;
+        }
+        public void setNatIp(String natIp){
+            this.natIp = natIp;
+        }
+        public void setSourceIp(String sourceIp){
+            this.sourceIp = sourceIp;
+        }
+        public void setVlanId(String vlanId){
+            this.vlanId = vlanId;
+        }
+        public String getVlanId(){
+            return vlanId;
+        }
     }
 }

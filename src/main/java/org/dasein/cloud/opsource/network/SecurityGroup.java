@@ -57,13 +57,13 @@ import javax.xml.transform.stream.StreamResult;
  */
 public class SecurityGroup extends AbstractFirewallSupport {
     static private final Logger logger = Logger.getLogger(SecurityGroup.class);
-    
+
     static public final String AUTHORIZE_SECURITY_GROUP_INGRESS = "authorizeSecurityGroupIngress";
     static public final String CREATE_SECURITY_GROUP            = "createSecurityGroup";
     static public final String DELETE_SECURITY_GROUP            = "deleteSecurityGroup";
     static public final String LIST_SECURITY_GROUPS             = "listSecurityGroups";
     static public final String REVOKE_SECURITY_GROUP_INGRESS    = "revokeSecurityGroupIngress";
-    
+
     private OpSource provider;
 
     SecurityGroup(OpSource provider) {
@@ -75,7 +75,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
     @Override
     public String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull RuleTarget sourceRuleTarget, @Nonnull Protocol protocol, @Nonnull RuleTarget destinationRuleTarget, int beginPort, int endPort, @Nonnegative int precedence) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Firewall.authorize");
-        try{
+        try {
             HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
             Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
             parameters.put(0, param);
@@ -273,82 +273,82 @@ public class SecurityGroup extends AbstractFirewallSupport {
     }
 
     public String convertNetMask(String mask){
-    	if(mask == null){
-    		return "255.255.255.255";
-    	}
-    	if(mask.contains(".")){
-    		return mask;
-    	}
-    	int prefix;
-    	try  
-    	{  
-    		prefix = Integer.parseInt(mask);
-    		
-    	}catch(NumberFormatException nfe)  
-    	{  
-    		prefix = 0;  
-    	 }
-    	
-    	int maskValue = 0xffffffff << (32 - prefix);
-    	int value = maskValue;
-    	byte[] bytes = new byte[]{ 
-    	            (byte)(value >>> 24), (byte)(value >> 16 & 0xff), (byte)(value >> 8 & 0xff), (byte)(value & 0xff) };
+        if(mask == null){
+            return "255.255.255.255";
+        }
+        if(mask.contains(".")){
+            return mask;
+        }
+        int prefix;
+        try
+        {
+            prefix = Integer.parseInt(mask);
 
-    	InetAddress netAddr;
-		
-    	try {
-			netAddr = InetAddress.getByAddress(bytes);
-	    	return netAddr.getHostAddress();
-		} catch (UnknownHostException e) {
-			return "255.255.255.255";
-		}
+        }catch(NumberFormatException nfe)
+        {
+            prefix = 0;
+        }
+
+        int maskValue = 0xffffffff << (32 - prefix);
+        int value = maskValue;
+        byte[] bytes = new byte[]{
+                (byte)(value >>> 24), (byte)(value >> 16 & 0xff), (byte)(value >> 8 & 0xff), (byte)(value & 0xff) };
+
+        InetAddress netAddr;
+
+        try {
+            netAddr = InetAddress.getByAddress(bytes);
+            return netAddr.getHostAddress();
+        } catch (UnknownHostException e) {
+            return "255.255.255.255";
+        }
     }
-   
+
     // 
     private String convertCidr(String cidr){
-    	String mask = "255.255.255.255";
-		if(cidr != null){
-			String[] ipInfo = cidr.split("/");
-			String ipAddress = ipInfo[0];
-			if(ipInfo.length >1){
-				mask = convertNetMask(ipInfo[1]);
-			}
-			return ipAddress +"/" + mask;
-		}		
-    	return null;
+        String mask = "255.255.255.255";
+        if(cidr != null){
+            String[] ipInfo = cidr.split("/");
+            String ipAddress = ipInfo[0];
+            if(ipInfo.length >1){
+                mask = convertNetMask(ipInfo[1]);
+            }
+            return ipAddress +"/" + mask;
+        }
+        return null;
     }
-    
-    public String getNetMask(String mask){
-    	if(mask == null){
-    		return "255.255.255.255";
-    	}
-    	if(mask.contains(".")){
-    		return mask;
-    	}
-    	int prefix;
-    	try{  
-    		prefix = Integer.parseInt(mask);
-    	}catch(NumberFormatException nfe){  
-    		prefix = 0;  
-    	}
-    	
-    	int maskValue = 0xffffffff << (32 - prefix);
-    	int value = maskValue;
-    	byte[] bytes = new byte[]{ 
-    	            (byte)(value >>> 24), (byte)(value >> 16 & 0xff), (byte)(value >> 8 & 0xff), (byte)(value & 0xff) };
 
-    	InetAddress netAddr;
-		try {
-			netAddr = InetAddress.getByAddress(bytes);
-	    	return netAddr.getHostAddress();
-		} catch (UnknownHostException e) {
-			return "255.255.255.255";
-		}
+    public String getNetMask(String mask){
+        if(mask == null){
+            return "255.255.255.255";
+        }
+        if(mask.contains(".")){
+            return mask;
+        }
+        int prefix;
+        try{
+            prefix = Integer.parseInt(mask);
+        }catch(NumberFormatException nfe){
+            prefix = 0;
+        }
+
+        int maskValue = 0xffffffff << (32 - prefix);
+        int value = maskValue;
+        byte[] bytes = new byte[]{
+                (byte)(value >>> 24), (byte)(value >> 16 & 0xff), (byte)(value >> 8 & 0xff), (byte)(value & 0xff) };
+
+        InetAddress netAddr;
+        try {
+            netAddr = InetAddress.getByAddress(bytes);
+            return netAddr.getHostAddress();
+        } catch (UnknownHostException e) {
+            return "255.255.255.255";
+        }
     }
 
     @Override
     public void delete(String firewallId) throws InternalException, CloudException {
-    	/** Does not support delete Firewall */
+        /** Does not support delete Firewall */
         throw new OperationNotSupportedException("Cannot delete firewalls in " + getProvider().getCloudName());
     }
 
@@ -384,27 +384,27 @@ public class SecurityGroup extends AbstractFirewallSupport {
             APITrace.end();
         }
     }
-    
-    private String getFirstAvaiablePositionForInsertRule(String firewallId) throws InternalException, CloudException{
-    	ArrayList<FirewallRule> list = (ArrayList<FirewallRule>) getRules(firewallId);
-    	if(list == null){
-    		return null;
-    	}
 
-    	for(int i = 100;i<= 500;i ++){
-    		String position = String.valueOf(i);
-    		boolean isExist = false;
-    		for(FirewallRule rule: list){
+    private String getFirstAvaiablePositionForInsertRule(String firewallId) throws InternalException, CloudException{
+        ArrayList<FirewallRule> list = (ArrayList<FirewallRule>) getRules(firewallId);
+        if(list == null){
+            return null;
+        }
+
+        for(int i = 100;i<= 500;i ++){
+            String position = String.valueOf(i);
+            boolean isExist = false;
+            for(FirewallRule rule: list){
                 if(position.equals(getFirewallPositionIdFromDaseinRuleId(rule.getProviderRuleId()))){
-    				isExist = true;
-    				break;
-    			}       		
-        	}
-    		if(!isExist){
-    			return position;
-    		}
-    	}
-    	return null;
+                    isExist = true;
+                    break;
+                }
+            }
+            if(!isExist){
+                return position;
+            }
+        }
+        return null;
     }
 
     private String getFirewallPositionIdFromDaseinRuleId(String daseinRuleId){
@@ -424,8 +424,6 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public @Nonnull Collection<FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.getRules");
         try {
-            /** In OpSource firewallId is the same as networkId */
-
             ArrayList<FirewallRule> list = new ArrayList<FirewallRule>();
 
             HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
@@ -484,8 +482,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
     @Override
     public Collection<Firewall> list() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.list");
-        try{
-            //List the network information
+        try {
             ArrayList<Firewall> list = new ArrayList<Firewall>();
             HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
             Param param = new Param("networkWithLocation", null);
@@ -686,7 +683,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
         NodeList attributes = node.getChildNodes();
         Firewall firewall = new Firewall();
-        
+
         firewall.setActive(true);
         firewall.setAvailable(true);
         firewall.setRegionId(provider.getContext().getRegionId());
@@ -694,28 +691,28 @@ public class SecurityGroup extends AbstractFirewallSupport {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
             String value;
-            
+
             if( attribute.getChildNodes().getLength() > 0 ) {
-                value = attribute.getFirstChild().getNodeValue();                
+                value = attribute.getFirstChild().getNodeValue();
             }
             else {
                 value = null;
             }
             if( name.equalsIgnoreCase(sNS + "id") ) {
-            	firewall.setProviderFirewallId(value);
-            	/** The firewall Id is the same as vlan Id */
-            	firewall.setProviderVlanId(value);
+                firewall.setProviderFirewallId(value);
+                /** The firewall Id is the same as vlan Id */
+                firewall.setProviderVlanId(value);
             }
             else if( name.equalsIgnoreCase(sNS + "name") ) {
-            	firewall.setName("enstratus security group for VLan " + value);
+                firewall.setName("enstratus security group for VLan " + value);
             }
             else if( name.equalsIgnoreCase(sNS + "description") ) {
-            	firewall.setDescription("enstratus security group for VLan "+ value);
+                firewall.setDescription("enstratus security group for VLan "+ value);
             }
             else if( name.equalsIgnoreCase(sNS + "location") && value != null ) {
-            	firewall.setRegionId(value);
+                firewall.setRegionId(value);
             }
-           
+
         }
         if( firewall.getProviderFirewallId() == null ) {
             logger.warn("Discovered firewall " + firewall.getProviderFirewallId() + " with an empty firewall ID");
@@ -729,7 +726,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
         }
         return firewall;
     }
-    
+
     private FirewallRule toRule(String firewallId, Node node) {
         if( node == null) {
             return null;
@@ -751,42 +748,42 @@ public class SecurityGroup extends AbstractFirewallSupport {
         RuleTarget source = null;
         RuleTarget destination = null;
         int positionId = -1;
-        
+
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName();
             String value;
 
             if( attribute.getChildNodes().getLength() > 0 ) {
-                value = attribute.getFirstChild().getNodeValue();                
+                value = attribute.getFirstChild().getNodeValue();
             }
             else {
                 value = null;
             }
 
             if( name.equalsIgnoreCase(sNS + "id") ) {
-            	providerRuleId = value;
+                providerRuleId = value;
             }
             else if( name.equalsIgnoreCase(sNS + "position") ) {
-               positionId = Integer.parseInt(value);
+                positionId = Integer.parseInt(value);
             }
             else if( name.equalsIgnoreCase(sNS + "action") ) {
-            	
-            	if(value.equalsIgnoreCase("deny")){
-            		permission = Permission.DENY;
-            	}else{
-            		permission = Permission.ALLOW;
-            	}                      	
+
+                if(value.equalsIgnoreCase("deny")){
+                    permission = Permission.DENY;
+                }else{
+                    permission = Permission.ALLOW;
+                }
             }
             else if( name.equalsIgnoreCase(sNS + "protocol") ) {
-            	
-            	if(value.equalsIgnoreCase("TCP")){
-            		protocol = Protocol.TCP;
-            	}else if (value.equalsIgnoreCase("UDP")){
-            		protocol = Protocol.UDP;
-            	}else if (value.equalsIgnoreCase("ICMP") ){
-            		protocol = Protocol.ICMP;
-            	}
+
+                if(value.equalsIgnoreCase("TCP")){
+                    protocol = Protocol.TCP;
+                }else if (value.equalsIgnoreCase("UDP")){
+                    protocol = Protocol.UDP;
+                }else if (value.equalsIgnoreCase("ICMP") ){
+                    protocol = Protocol.ICMP;
+                }
                 else if (value.equalsIgnoreCase("IP")){
                     protocol = Protocol.IPSEC;
                 }
@@ -794,19 +791,19 @@ public class SecurityGroup extends AbstractFirewallSupport {
                     //OpSource has a rule with an odd protocol by default that we don't want to add or display
                     return null;
                 }
-            	
+
             }
             else if( name.equalsIgnoreCase(sNS + "sourceIpRange") ) {
-        		String networkMask = null;
-            	NodeList ipAddresses = attribute.getChildNodes();
-            	for(int j = 0 ;j < ipAddresses.getLength(); j ++){
-            		Node ip = ipAddresses.item(j);
-            		if(ip.getNodeType() == Node.TEXT_NODE) continue;
-   
-            		if(ip.getNodeName().equals(sNS + "ipAddress") && ip.getFirstChild().getNodeValue() != null){
+                String networkMask = null;
+                NodeList ipAddresses = attribute.getChildNodes();
+                for(int j = 0 ;j < ipAddresses.getLength(); j ++){
+                    Node ip = ipAddresses.item(j);
+                    if(ip.getNodeType() == Node.TEXT_NODE) continue;
+
+                    if(ip.getNodeName().equals(sNS + "ipAddress") && ip.getFirstChild().getNodeValue() != null){
                         source = RuleTarget.getCIDR(ip.getFirstChild().getNodeValue());
-            		}
-            	}
+                    }
+                }
             }
             else if( name.equalsIgnoreCase(sNS + "destinationIpRange") ) {
                 String networkMask = null;
@@ -821,34 +818,34 @@ public class SecurityGroup extends AbstractFirewallSupport {
                 }
             }
             else if( name.equalsIgnoreCase(sNS + "portRange") ) {
-            	NodeList portAttributes  = attribute.getChildNodes();
-            	String portType = null;
-           		for(int j=0;j<portAttributes.getLength();j++ ){
-	           		Node portItem = portAttributes.item(j);
-	           		if( portItem.getNodeName().equalsIgnoreCase(sNS + "type") && portItem.getFirstChild().getNodeValue() != null ) {
-	           			portType = portItem.getFirstChild().getNodeValue();	           			
-	                }
-	                else if( portItem.getNodeName().equalsIgnoreCase(sNS + "port1") && portItem.getFirstChild().getNodeValue() != null ) {
-	                	startPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
-	                	if(portType.equalsIgnoreCase("EQUAL_TO")){
-	                    	endPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
-	                    }
-	                }
-	                else if( portItem.getNodeName().equalsIgnoreCase(sNS + "port2") && portItem.getFirstChild().getNodeValue() != null ) {
-	                	endPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
-	                }	                                     
-           		}              	      
+                NodeList portAttributes  = attribute.getChildNodes();
+                String portType = null;
+                for(int j=0;j<portAttributes.getLength();j++ ){
+                    Node portItem = portAttributes.item(j);
+                    if( portItem.getNodeName().equalsIgnoreCase(sNS + "type") && portItem.getFirstChild().getNodeValue() != null ) {
+                        portType = portItem.getFirstChild().getNodeValue();
+                    }
+                    else if( portItem.getNodeName().equalsIgnoreCase(sNS + "port1") && portItem.getFirstChild().getNodeValue() != null ) {
+                        startPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
+                        if(portType.equalsIgnoreCase("EQUAL_TO")){
+                            endPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
+                        }
+                    }
+                    else if( portItem.getNodeName().equalsIgnoreCase(sNS + "port2") && portItem.getFirstChild().getNodeValue() != null ) {
+                        endPort = Integer.valueOf(portItem.getFirstChild().getNodeValue());
+                    }
+                }
             }
             else if( name.equalsIgnoreCase(sNS + "type") ) {
-            	if(value != null){
-            		if(value.equalsIgnoreCase("INSIDE_ACL")){
-            			direction = Direction.EGRESS;
-            		}else if (value.equalsIgnoreCase("OUTSIDE_ACL")){
-            			direction = Direction.INGRESS;
-            		}else{
-            			direction = Direction.INGRESS;
-            		}
-            	}
+                if(value != null){
+                    if(value.equalsIgnoreCase("INSIDE_ACL")){
+                        direction = Direction.EGRESS;
+                    }else if (value.equalsIgnoreCase("OUTSIDE_ACL")){
+                        direction = Direction.INGRESS;
+                    }else{
+                        direction = Direction.INGRESS;
+                    }
+                }
             }
         }
 
