@@ -209,8 +209,9 @@ public class SecurityGroup implements FirewallSupport {
             portRange.appendChild(portRangeType);
             portRange.appendChild(port);
             if(beginPort != endPort){
+                portRangeType.setTextContent("RANGE");
                 Element port2 = doc.createElement("port2");
-                port.setTextContent(String.valueOf(endPort));
+                port2.setTextContent(String.valueOf(endPort));
                 portRange.appendChild(port2);
             }
         }
@@ -285,7 +286,6 @@ public class SecurityGroup implements FirewallSupport {
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
                 if(node.getNodeName().equals(sNS + "id") && node.getFirstChild().getNodeValue() != null ){
-                    System.out.println("Returning this value: " + node.getFirstChild().getNodeValue() + ":" + positionId);
                     return node.getFirstChild().getNodeValue() + ":" + positionId;
                 }
 
