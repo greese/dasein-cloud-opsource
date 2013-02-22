@@ -28,12 +28,11 @@ import java.util.Locale;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
-import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.*;
-import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -75,189 +74,202 @@ public class SecurityGroup extends AbstractFirewallSupport {
     @Nonnull
     @Override
     public String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull RuleTarget sourceRuleTarget, @Nonnull Protocol protocol, @Nonnull RuleTarget destinationRuleTarget, int beginPort, int endPort, @Nonnegative int precedence) throws CloudException, InternalException {
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-        parameters.put(0, param);
+        APITrace.begin(getProvider(), "Firewall.authorize");
+        try{
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
 
-        param = new Param(firewallId, null);
-        parameters.put(1, param);
+            param = new Param(firewallId, null);
+            parameters.put(1, param);
 
-        param = new Param("aclrule", null);
-        parameters.put(2, param);
+            param = new Param("aclrule", null);
+            parameters.put(2, param);
 
-        /** Create post body */
-        Document doc = provider.createDoc();
-        Element aclRule = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "AclRule");
-        Element nameElmt = doc.createElement("name");
-        if(direction.equals(Direction.INGRESS)) nameElmt.setTextContent(sourceRuleTarget.getCidr());
-        else nameElmt.setTextContent(destinationRuleTarget.getCidr());
+            /** Create post body */
+            Document doc = provider.createDoc();
+            Element aclRule = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "AclRule");
+            Element nameElmt = doc.createElement("name");
+            if(direction.equals(Direction.INGRESS)) nameElmt.setTextContent(sourceRuleTarget.getCidr());
+            else nameElmt.setTextContent(destinationRuleTarget.getCidr());
 
-        Element positionElmt = doc.createElement("position");
-        String positionId = precedence + "";
-        if(positionId.equals("-1"))positionId = getFirstAvaiablePositionForInsertRule(firewallId);
-        if(positionId == null){
-            throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
-        }else{
-            positionElmt.setTextContent(positionId);
-        }
+            Element positionElmt = doc.createElement("position");
+            String positionId = precedence + "";
+            if(precedence <= 0)positionId = getFirstAvaiablePositionForInsertRule(firewallId);
+            if(positionId == null){
+                throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
+            }else{
+                positionElmt.setTextContent(positionId);
+            }
 
-        Element actionElmt = doc.createElement("action");
-        //<!-- mandatory, string, one of (PERMIT,DENY) -->
-        actionElmt.setTextContent(permission.equals(Permission.ALLOW) ? "PERMIT" : "DENY");
+            Element actionElmt = doc.createElement("action");
+            //<!-- mandatory, string, one of (PERMIT,DENY) -->
+            actionElmt.setTextContent(permission.equals(Permission.ALLOW) ? "PERMIT" : "DENY");
 
-        Element protocolElmt = doc.createElement("protocol");
-        String protocolType = "";
-        if(protocol.equals(Protocol.IPSEC))protocolType = "IP";//Filthy hack to allow IP type as a protocol
-        else protocolType = protocol.name();
-        protocolElmt.setTextContent(protocolType);
+            Element protocolElmt = doc.createElement("protocol");
+            String protocolType = "";
+            if(protocol.equals(Protocol.IPSEC))protocolType = "IP";//Filthy hack to allow IP type as a protocol
+            else protocolType = protocol.name();
+            protocolElmt.setTextContent(protocolType);
 
-        String sourceIp="0.0.0.0";
-        String sourceMask = null;
-        boolean singleIp = false;
+            String sourceIp="0.0.0.0";
+            String sourceMask = null;
+            boolean singleIp = false;
 
-        if(sourceRuleTarget.getCidr() != null){
-            if(sourceRuleTarget.getCidr().contains("/")){
-                String[] ipInfo = sourceRuleTarget.getCidr().split("/");
-                sourceIp = ipInfo[0];
-                if(ipInfo.length >1){
-                    sourceMask = convertNetMask(ipInfo[1]);
+            if(sourceRuleTarget.getCidr() != null){
+                if(sourceRuleTarget.getCidr().contains("/")){
+                    String[] ipInfo = sourceRuleTarget.getCidr().split("/");
+                    sourceIp = ipInfo[0];
+                    if(ipInfo.length >1){
+                        sourceMask = convertNetMask(ipInfo[1]);
+                    }
+                }
+                else{
+                    sourceIp = sourceRuleTarget.getCidr();
+                    singleIp = true;
+                }
+            }
+
+            Element sourceIpRange = doc.createElement("sourceIpRange");
+            Element sourceIpAddress = doc.createElement("ipAddress");
+            sourceIpAddress.setTextContent(sourceIp);
+            sourceIpRange.appendChild(sourceIpAddress);
+
+            /** OpSource can not accept cidr style as IP/255.255.255.255, therefore when it is only one IP, ignore */
+            if(!singleIp && sourceMask != null && !sourceMask.equals("255.255.255.255") ){
+                Element sourceNetMask = doc.createElement("netmask");
+                sourceNetMask.setTextContent(sourceMask);
+                sourceIpRange.appendChild(sourceNetMask);
+            }
+
+            String destinationIp = "0.0.0.0";
+            String destinationMask = null;
+            singleIp = false;
+
+            if(destinationRuleTarget.getCidr() != null){
+                if(destinationRuleTarget.getCidr().contains("/")){
+                    String[] ipInfo = destinationRuleTarget.getCidr().split("/");
+                    destinationIp = ipInfo[0];
+                    if(ipInfo.length > 1){
+                        destinationMask = convertNetMask(ipInfo[1]);
+                    }
+                }
+                else{
+                    destinationIp = destinationRuleTarget.getCidr();
+                    singleIp = true;
+                }
+            }
+
+            Element destinationIpRange = doc.createElement("destinationIpRange");
+            Element destinationIpAddress = doc.createElement("ipAddress");
+            destinationIpAddress.setTextContent(destinationIp);
+            destinationIpRange.appendChild(destinationIpAddress);
+
+            if(!singleIp && destinationMask != null && !destinationMask.equals("255.255.255.255") ){
+                Element destinationNetMask = doc.createElement("netmask");
+                destinationNetMask.setTextContent(destinationMask);
+                destinationIpRange.appendChild(destinationNetMask);
+            }
+
+            Element portRange = doc.createElement("portRange");
+            Element portRangeType = doc.createElement("type");
+            if(!protocol.equals(Protocol.IPSEC)){
+                portRangeType.setTextContent("EQUAL_TO");
+
+                Element port = doc.createElement("port1");
+                port.setTextContent(String.valueOf(beginPort));
+
+                portRange.appendChild(portRangeType);
+                portRange.appendChild(port);
+                if(beginPort != endPort){
+                    portRangeType.setTextContent("RANGE");
+                    Element port2 = doc.createElement("port2");
+                    port2.setTextContent(String.valueOf(endPort));
+                    portRange.appendChild(port2);
                 }
             }
             else{
-                sourceIp = sourceRuleTarget.getCidr();
-                singleIp = true;
+                portRangeType.setTextContent("ALL");
+                portRange.appendChild(portRangeType);
             }
-        }
 
-        Element sourceIpRange = doc.createElement("sourceIpRange");
-        Element sourceIpAddress = doc.createElement("ipAddress");
-        sourceIpAddress.setTextContent(sourceIp);
-        sourceIpRange.appendChild(sourceIpAddress);
+            Element type = doc.createElement("type");
+            type.setTextContent(direction.equals(Direction.INGRESS) ? "OUTSIDE_ACL" : "INSIDE_ACL");
 
-        /** OpSource can not accept cidr style as IP/255.255.255.255, therefore when it is only one IP, ignore */
-        if(!singleIp && sourceMask != null && !sourceMask.equals("255.255.255.255") ){
-            Element sourceNetMask = doc.createElement("netmask");
-            sourceNetMask.setTextContent(sourceMask);
-            sourceIpRange.appendChild(sourceNetMask);
-        }
+            aclRule.appendChild(nameElmt);
+            aclRule.appendChild(positionElmt);
+            aclRule.appendChild(actionElmt);
+            aclRule.appendChild(protocolElmt);
+            //aclRule.appendChild(protocolElmt);
+            if(!sourceIp.equals("0.0.0.0") && !sourceRuleTarget.getRuleTargetType().equals(RuleTargetType.GLOBAL)) aclRule.appendChild(sourceIpRange);
+            if(!destinationIp.equals("0.0.0.0") && !destinationRuleTarget.getRuleTargetType().equals(RuleTargetType.GLOBAL))aclRule.appendChild(destinationIpRange);
+            aclRule.appendChild(portRange);
+            aclRule.appendChild(type);
+            doc.appendChild(aclRule);
 
-        String destinationIp = "0.0.0.0";
-        String destinationMask = null;
-        singleIp = false;
+            System.out.println("Sending this rule:");
+            try{
+                TransformerFactory transfac = TransformerFactory.newInstance();
+                Transformer trans = transfac.newTransformer();
+                trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                trans.setOutputProperty(OutputKeys.INDENT, "yes");
 
-        if(destinationRuleTarget.getCidr() != null){
-            if(destinationRuleTarget.getCidr().contains("/")){
-                String[] ipInfo = destinationRuleTarget.getCidr().split("/");
-                destinationIp = ipInfo[0];
-                if(ipInfo.length > 1){
-                    destinationMask = convertNetMask(ipInfo[1]);
+                StringWriter sw = new StringWriter();
+                StreamResult result = new StreamResult(sw);
+                DOMSource source = new DOMSource(doc);
+                trans.transform(source, result);
+                String xmlString = sw.toString();
+                System.out.println(xmlString);
+            }
+            catch(Exception ex){
+                ex.printStackTrace();
+            }
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
+            Document responseDoc = method.invoke();
+
+            System.out.println("Response:");
+            try{
+                TransformerFactory transfac = TransformerFactory.newInstance();
+                Transformer trans = transfac.newTransformer();
+                trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                trans.setOutputProperty(OutputKeys.INDENT, "yes");
+
+                StringWriter sw = new StringWriter();
+                StreamResult result = new StreamResult(sw);
+                DOMSource source = new DOMSource(responseDoc);
+                trans.transform(source, result);
+                String xmlString = sw.toString();
+                System.out.println(xmlString);
+            }
+            catch(Exception ex){
+                ex.printStackTrace();
+            }
+
+            Node item = responseDoc.getDocumentElement();
+            String sNS = "";
+            try{
+                sNS = item.getNodeName().substring(0, item.getNodeName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            NodeList matches = item.getChildNodes();
+            if(matches != null){
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+                    if(node.getNodeName().equals(sNS + "id") && node.getFirstChild().getNodeValue() != null ){
+                        System.out.println("Returning this value: " + node.getFirstChild().getNodeValue() + ":" + positionId);
+                        return node.getFirstChild().getNodeValue() + ":" + positionId;
+                    }
+
                 }
             }
-            else{
-                destinationIp = destinationRuleTarget.getCidr();
-                singleIp = true;
-            }
+            throw new CloudException("Fails to authorize firewall rule without explaination.");
         }
-
-        Element destinationIpRange = doc.createElement("destinationIpRange");
-        Element destinationIpAddress = doc.createElement("ipAddress");
-        destinationIpAddress.setTextContent(destinationIp);
-        destinationIpRange.appendChild(destinationIpAddress);
-
-        if(!singleIp && destinationMask != null && !destinationMask.equals("255.255.255.255") ){
-            Element destinationNetMask = doc.createElement("netmask");
-            destinationNetMask.setTextContent(destinationMask);
-            destinationIpRange.appendChild(destinationNetMask);
+        finally {
+            APITrace.end();
         }
-
-        Element portRange = doc.createElement("portRange");
-        Element portRangeType = doc.createElement("type");
-        if(!protocol.equals(Protocol.IPSEC)){
-            portRangeType.setTextContent("EQUAL_TO");
-
-            Element port = doc.createElement("port1");
-            port.setTextContent(String.valueOf(beginPort));
-            portRange.appendChild(portRangeType);
-            portRange.appendChild(port);
-        }
-        else{
-            portRangeType.setTextContent("ALL");
-            portRange.appendChild(portRangeType);
-        }
-
-        Element type = doc.createElement("type");
-        type.setTextContent(direction.equals(Direction.INGRESS) ? "OUTSIDE_ACL" : "INSIDE_ACL");
-
-        aclRule.appendChild(nameElmt);
-        aclRule.appendChild(positionElmt);
-        aclRule.appendChild(actionElmt);
-        aclRule.appendChild(protocolElmt);
-        //aclRule.appendChild(protocolElmt);
-        if(!sourceIp.equals("0.0.0.0") && !sourceRuleTarget.getRuleTargetType().equals(RuleTargetType.GLOBAL)) aclRule.appendChild(sourceIpRange);
-        if(!destinationIp.equals("0.0.0.0") && !destinationRuleTarget.getRuleTargetType().equals(RuleTargetType.GLOBAL))aclRule.appendChild(destinationIpRange);
-        aclRule.appendChild(portRange);
-        aclRule.appendChild(type);
-        doc.appendChild(aclRule);
-
-        System.out.println("Sending this rule:");
-        try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(doc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
-
-        OpSourceMethod method = new OpSourceMethod(provider,
-                provider.buildUrl(null,true, parameters),
-                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
-        Document responseDoc = method.invoke();
-
-        System.out.println("Response:");
-        try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(responseDoc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
-
-        Node item = responseDoc.getDocumentElement();
-        String sNS = "";
-        try{
-            sNS = item.getNodeName().substring(0, item.getNodeName().indexOf(":") + 1);
-        }
-        catch(IndexOutOfBoundsException ex){}
-        NodeList matches = item.getChildNodes();
-        if(matches != null){
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
-                if(node.getNodeName().equals(sNS + "id") && node.getFirstChild().getNodeValue() != null ){
-                    System.out.println("Returning this value: " + node.getFirstChild().getNodeValue() + ":" + positionId);
-                    return node.getFirstChild().getNodeValue() + ":" + positionId;
-                }
-
-            }
-        }
-        throw new CloudException("Fails to authorize firewall rule without explaination.");
     }
 
     public String convertNetMask(String mask){
@@ -343,28 +355,34 @@ public class SecurityGroup extends AbstractFirewallSupport {
     /** Equal to network(VLAN) */
     @Override
     public Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
-     	//Firewall id is the same as network id
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-    	parameters.put(0, param);
-    	param = new Param(firewallId, null);
-    	parameters.put(1, param); 
-    	
-    	OpSourceMethod method = new OpSourceMethod(provider, 
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-      	Document doc = method.invoke();
-     
-      	Node item = doc.getDocumentElement();
-        String sNS = "";
-        try{
-            sNS = item.getNodeName().substring(0, item.getNodeName().indexOf(":") + 1);
+        APITrace.begin(getProvider(), "Firewall.getFirewall");
+        try {
+            //Firewall id is the same as network id
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
+            param = new Param(firewallId, null);
+            parameters.put(1, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+            Document doc = method.invoke();
+
+            Node item = doc.getDocumentElement();
+            String sNS = "";
+            try{
+                sNS = item.getNodeName().substring(0, item.getNodeName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            if(item.getNodeName().equals(sNS + "Network")){
+                return toFirewall(item);
+            }
+            return null;
         }
-        catch(IndexOutOfBoundsException ex){}
-      	if(item.getNodeName().equals(sNS + "Network")){
-      		return toFirewall(item);   		
-      	}
-      	return null;        
+        finally {
+            APITrace.end();
+        }
     }
     
     private String getFirstAvaiablePositionForInsertRule(String firewallId) throws InternalException, CloudException{
@@ -372,12 +390,11 @@ public class SecurityGroup extends AbstractFirewallSupport {
     	if(list == null){
     		return null;
     	}
-    	
+
     	for(int i = 100;i<= 500;i ++){
     		String position = String.valueOf(i);
     		boolean isExist = false;
     		for(FirewallRule rule: list){
-
                 if(position.equals(getFirewallPositionIdFromDaseinRuleId(rule.getProviderRuleId()))){
     				isExist = true;
     				break;
@@ -405,42 +422,48 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
     @Override
     public @Nonnull Collection<FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
-     	/** In OpSource firewallId is the same as networkId */
- 
-    	ArrayList<FirewallRule> list = new ArrayList<FirewallRule>();
-     
-      	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-    	parameters.put(0, param);
-    	        	
-    	param = new Param(firewallId, null);
-      	parameters.put(1, param);
-      	
-      	param = new Param("aclrule", null);
-      	parameters.put(2, param);
+        APITrace.begin(getProvider(), "Firewall.getRules");
+        try {
+            /** In OpSource firewallId is the same as networkId */
 
-    	OpSourceMethod method = new OpSourceMethod(provider, 
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();
+            ArrayList<FirewallRule> list = new ArrayList<FirewallRule>();
 
-        String sNS = "";
-        try{
-            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
-        }
-        catch(IndexOutOfBoundsException ex){}
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
 
-        NodeList matches = doc.getElementsByTagName(sNS + "AclRule");
-        if(matches != null){
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);            
-                FirewallRule rule = toRule(firewallId,node);
-                if( rule != null ) {
-                	list.add(rule);
+            param = new Param(firewallId, null);
+            parameters.put(1, param);
+
+            param = new Param("aclrule", null);
+            parameters.put(2, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+            Document doc = method.invoke();
+
+            String sNS = "";
+            try{
+                sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+
+            NodeList matches = doc.getElementsByTagName(sNS + "AclRule");
+            if(matches != null){
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+                    FirewallRule rule = toRule(firewallId,node);
+                    if( rule != null ) {
+                        list.add(rule);
+                    }
                 }
             }
+            return list;
         }
-        return list;
+        finally {
+            APITrace.end();
+        }
     }
 
     @Nonnull
@@ -460,43 +483,43 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
     @Override
     public Collection<Firewall> list() throws InternalException, CloudException {
-      	//List the network information
-    	ArrayList<Firewall> list = new ArrayList<Firewall>();
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param("networkWithLocation", null);
-    	parameters.put(0, param);
-
-    	param = new Param(provider.getDefaultRegionId(), null);
-      	parameters.put(1, param);
-
-    	OpSourceMethod method = new OpSourceMethod(provider,
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-      	Document doc = method.invoke();
-        //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
-
-        String sNS = "";
+        APITrace.begin(getProvider(), "Firewall.list");
         try{
-            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
-        }
-        catch(IndexOutOfBoundsException ex){}
-        NodeList matches = doc.getElementsByTagName(sNS + "network");
-        if(matches != null){
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);            
-                Firewall firewall = toFirewall(node);                
-                if( firewall != null ) {
-                	list.add(firewall);
+            //List the network information
+            ArrayList<Firewall> list = new ArrayList<Firewall>();
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param("networkWithLocation", null);
+            parameters.put(0, param);
+
+            //param = new Param(provider.getDefaultRegionId(), null);
+            //parameters.put(1, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+            Document doc = method.invoke();
+            //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+
+            String sNS = "";
+            try{
+                sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            NodeList matches = doc.getElementsByTagName(sNS + "network");
+            if(matches != null){
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+                    Firewall firewall = toFirewall(node);
+                    if( firewall != null ) {
+                        list.add(firewall);
+                    }
                 }
             }
+            return list;
         }
-        return list;
-    }
-
-    @Nonnull
-    @Override
-    public Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
-        return null;  //TODO: Implement for 2013.01
+        finally {
+            APITrace.end();
+        }
     }
 
     @Nonnull
@@ -542,106 +565,98 @@ public class SecurityGroup extends AbstractFirewallSupport {
     }
 
     @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
-    }
-
-    @Override
     public void revoke(@Nonnull String firewallRuleId) throws InternalException, CloudException {
-        String firewallId = "";
-        ArrayList<Firewall> firewalls = (ArrayList<Firewall>)list();
-        for(Firewall firewall : firewalls){
-            ArrayList<FirewallRule> rules = (ArrayList<FirewallRule>)getRules(firewall.getProviderFirewallId());
-            for(FirewallRule rule : rules){
-                if(rule.getProviderRuleId().equals(firewallRuleId)){
-                    firewallId = rule.getFirewallId();
-                    break;
+        APITrace.begin(getProvider(), "Firewall.revoke");
+        try {
+            String firewallId = "";
+            ArrayList<Firewall> firewalls = (ArrayList<Firewall>)list();
+            for(Firewall firewall : firewalls){
+                ArrayList<FirewallRule> rules = (ArrayList<FirewallRule>)getRules(firewall.getProviderFirewallId());
+                for(FirewallRule rule : rules){
+                    if(rule.getProviderRuleId().equals(firewallRuleId)){
+                        firewallId = rule.getFirewallId();
+                        break;
+                    }
                 }
             }
+
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
+
+            param = new Param(firewallId, null);
+            parameters.put(1, param);
+
+            param = new Param("aclrule", null);
+            parameters.put(2, param);
+
+            if(firewallRuleId.indexOf(":") > 0)firewallRuleId = firewallRuleId.substring(0, firewallRuleId.indexOf(":"));
+            param = new Param(firewallRuleId, null);
+            parameters.put(3, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl("delete",true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+            method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
         }
-
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-        parameters.put(0, param);
-
-        param = new Param(firewallId, null);
-        parameters.put(1, param);
-
-        param = new Param("aclrule", null);
-        parameters.put(2, param);
-
-        if(firewallRuleId.indexOf(":") > 0)firewallRuleId = firewallRuleId.substring(0, firewallRuleId.indexOf(":"));
-        param = new Param(firewallRuleId, null);
-        parameters.put(3, param);
-
-        OpSourceMethod method = new OpSourceMethod(provider,
-                provider.buildUrl("delete",true, parameters),
-                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-        method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        revoke(firewallId, Direction.INGRESS, cidr, protocol, beginPort, endPort);
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        FirewallRule rule = null;
-        String opSourceCidr = this.convertCidr(cidr);
-
-        for( FirewallRule r : getRules(firewallId) ) {
-            if(opSourceCidr == null &&  !r.getCidr().equals(opSourceCidr) ) {
-                continue;
-            }
-            if( !(r.getStartPort() == beginPort) ) {
-                continue;
-            }
-            if( !(r.getEndPort() == endPort) ) {
-                continue;
-            }
-            if( r.getProtocol() != null &&  !r.getProtocol().equals(protocol) ) {
-                continue;
-            }
-
-            rule = r;
-            break;
-
+        finally {
+            APITrace.end();
         }
-        if( rule == null ) {
-            logger.warn("No such rule for " + firewallId + ": " + cidr + "/" + protocol + "/" + beginPort + "/" + endPort);
-            return;
+    }
+
+    @Override
+    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "Firewall.revoke");
+        try {
+            FirewallRule rule = null;
+            String opSourceCidr = this.convertCidr(cidr);
+
+            for( FirewallRule r : getRules(firewallId) ) {
+                if(opSourceCidr == null &&  !r.getCidr().equals(opSourceCidr) ) {
+                    continue;
+                }
+                if( !(r.getStartPort() == beginPort) ) {
+                    continue;
+                }
+                if( !(r.getEndPort() == endPort) ) {
+                    continue;
+                }
+                if( r.getProtocol() != null &&  !r.getProtocol().equals(protocol) ) {
+                    continue;
+                }
+
+                rule = r;
+                break;
+
+            }
+            if( rule == null ) {
+                logger.warn("No such rule for " + firewallId + ": " + cidr + "/" + protocol + "/" + beginPort + "/" + endPort);
+                return;
+            }
+
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
+
+            param = new Param(firewallId, null);
+            parameters.put(1, param);
+
+            param = new Param("aclrule", null);
+            parameters.put(2, param);
+
+            String ruleId = rule.getProviderRuleId();
+            if(ruleId.indexOf(":") > 0)ruleId = ruleId.substring(0, ruleId.indexOf(":"));
+            param = new Param(ruleId, null);
+            parameters.put(3, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl("delete",true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+            method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
         }
-
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-        parameters.put(0, param);
-
-        param = new Param(firewallId, null);
-        parameters.put(1, param);
-
-        param = new Param("aclrule", null);
-        parameters.put(2, param);
-
-        String ruleId = rule.getProviderRuleId();
-        if(ruleId.indexOf(":") > 0)ruleId = ruleId.substring(0, ruleId.indexOf(":"));
-        param = new Param(ruleId, null);
-        parameters.put(3, param);
-
-        OpSourceMethod method = new OpSourceMethod(provider,
-                provider.buildUrl("delete",true, parameters),
-                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-        method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException{
-        //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -767,7 +782,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             	
             	if(value.equalsIgnoreCase("TCP")){
             		protocol = Protocol.TCP;
-            	}else if (value.equalsIgnoreCase("UPD")){
+            	}else if (value.equalsIgnoreCase("UDP")){
             		protocol = Protocol.UDP;
             	}else if (value.equalsIgnoreCase("ICMP") ){
             		protocol = Protocol.ICMP;

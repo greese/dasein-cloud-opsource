@@ -72,6 +72,7 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -215,6 +216,7 @@ public class OpSourceMethod {
                     }
                 }
                 /**  Now execute the request */
+                APITrace.trace(provider, method.toString() + " " + urlStr);
                 httpResponse = httpclient.execute((HttpUriRequest) method);
                 status = httpResponse.getStatusLine().getStatusCode();
                 if( wire.isDebugEnabled() ) {
