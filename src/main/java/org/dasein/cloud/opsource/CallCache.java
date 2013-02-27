@@ -57,8 +57,8 @@ public class CallCache {
 
     protected CallCache(){
         cachedAPICalls = new HashMap();
-        networkWithLocationThreshold = (60*5*1000);//Timeouts set to five minutes
-        datacenterWithLimitsThreshold = (60*5*1000);
+        networkWithLocationThreshold = 300000;//Timeouts set to five minutes
+        datacenterWithLimitsThreshold = 300000;
     }
 
     private Document getRealAPICall(OpSource provider, HashMap<Integer, Param> parameters, String resource, String regionServiceURL) throws CloudException, InternalException{

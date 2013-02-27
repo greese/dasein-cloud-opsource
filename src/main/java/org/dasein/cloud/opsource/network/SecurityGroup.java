@@ -201,18 +201,42 @@ public class SecurityGroup implements FirewallSupport {
         Element portRange = doc.createElement("portRange");
         Element portRangeType = doc.createElement("type");
         if(!protocol.equals(Protocol.IPSEC)){
-            portRangeType.setTextContent("EQUAL_TO");
+            if(beginPort <= 0 && endPort <= 0){
+                portRangeType.setTextContent("ALL");
+                portRange.appendChild(portRangeType);
+            }
+            else if(beginPort <= 0 && endPort > 0){
+                portRangeType.setTextContent("LESS_THAN");
 
-            Element port = doc.createElement("port1");
-            port.setTextContent(String.valueOf(beginPort));
+                Element port = doc.createElement("port1");
+                port.setTextContent(String.valueOf(endPort));
 
-            portRange.appendChild(portRangeType);
-            portRange.appendChild(port);
-            if(beginPort != endPort){
-                portRangeType.setTextContent("RANGE");
-                Element port2 = doc.createElement("port2");
-                port2.setTextContent(String.valueOf(endPort));
-                portRange.appendChild(port2);
+                portRange.appendChild(portRangeType);
+                portRange.appendChild(port);
+            }
+            else if(beginPort > 0 && endPort <= 0){
+                portRangeType.setTextContent("GREATER_THAN");
+
+                Element port = doc.createElement("port1");
+                port.setTextContent(String.valueOf(beginPort));
+
+                portRange.appendChild(portRangeType);
+                portRange.appendChild(port);
+            }
+            else{
+                portRangeType.setTextContent("EQUAL_TO");
+
+                Element port = doc.createElement("port1");
+                port.setTextContent(String.valueOf(beginPort));
+
+                portRange.appendChild(portRangeType);
+                portRange.appendChild(port);
+                if(beginPort != endPort){
+                    portRangeType.setTextContent("RANGE");
+                    Element port2 = doc.createElement("port2");
+                    port2.setTextContent(String.valueOf(endPort));
+                    portRange.appendChild(port2);
+                }
             }
         }
         else{
@@ -234,46 +258,35 @@ public class SecurityGroup implements FirewallSupport {
         aclRule.appendChild(type);
         doc.appendChild(aclRule);
 
-        System.out.println("Sending this rule:");
-        try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(doc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
-
         OpSourceMethod method = new OpSourceMethod(provider,
                 provider.buildUrl(null,true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
         Document responseDoc = method.invoke();
 
-        System.out.println("Response:");
+        String errorMsg = "";
         try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(responseDoc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
+            Node item = responseDoc.getDocumentElement();
+            String sNS = "";
+            try{
+                sNS = item.getNodeName().substring(0, item.getNodeName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            NodeList matches = item.getChildNodes();
+            if(matches != null){
+                boolean error = false;
+                for(int i=0;i<matches.getLength();i++){
+                    Node node = matches.item(i);
+                    if(node.getNodeName().equals(sNS + "result") && node.getFirstChild().getNodeValue() != null){
+                        if(node.getFirstChild().getNodeValue().equalsIgnoreCase("error"))error = true;
+                    }
+                    else if(error && node.getNodeName().equals(sNS + "resultDetail") && node.getFirstChild().getNodeValue() != null){
+                        errorMsg = node.getFirstChild().getNodeValue();
+                    }
+                }
+            }
         }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
+        catch(Exception ex){}
+        if(!errorMsg.equals(""))throw new CloudException(errorMsg);
 
         Node item = responseDoc.getDocumentElement();
         String sNS = "";
@@ -511,8 +524,8 @@ public class SecurityGroup implements FirewallSupport {
         Param param = new Param("networkWithLocation", null);
     	parameters.put(0, param);
 
-    	//param = new Param(provider.getDefaultRegionId(), null);
-      	//parameters.put(1, param);
+    	param = new Param(provider.getDefaultRegionId(), null);
+      	parameters.put(1, param);
 
     	OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
