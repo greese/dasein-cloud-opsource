@@ -118,8 +118,8 @@ public class ServerImage implements MachineImageSupport {
 
     @Nullable
     @Override
-    public MachineImage getImage(@Nonnull String s) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+    public MachineImage getImage(@Nonnull String imageId) throws CloudException, InternalException {
+        return getMachineImage(imageId);
     }
 
     @Override
@@ -153,18 +153,18 @@ public class ServerImage implements MachineImageSupport {
     @Override
     @Deprecated
     public @Nonnull String getProviderTermForImage(@Nonnull Locale locale) {
-        return "Server Image";
+        return "OS Image";
     }
 
     @Nonnull
     @Override
     public String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass imageClass) {
-        return null;  //TODO: Implement for 2013.01
+        return "OS Image";
     }
 
     @Override
     public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls){
-        return null; // TODO: Implement for 2013.02
+        return "Customer Image";
     }
 
 
@@ -300,9 +300,6 @@ public class ServerImage implements MachineImageSupport {
 
         return false;
     }
-    
- 
- 
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
@@ -318,12 +315,48 @@ public class ServerImage implements MachineImageSupport {
     @Nonnull
     @Override
     public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        if( logger.isTraceEnabled() ) {
+            logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
+        }
+
+        ArrayList<MachineImage> list = new ArrayList<MachineImage>();
+
+        /** Get OpSource public Image */
+        HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
+        parameters.put(0, param);
+
+        param = new Param(provider.getDefaultRegionId(), null);
+        parameters.put(1, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null, false, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+
+        Document doc = method.invoke();
+
+        NodeList matches = doc.getElementsByTagName(OpSource_IMAGE_TAG);
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node node = matches.item(i);
+
+            MachineImage image = toImage(node,false,false, "");
+
+            if( image != null ) {
+                list.add(image);
+            }
+        }
+
+        if( logger.isTraceEnabled() ) {
+            logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
+        }
+
+        return list;
     }
 
     @Nonnull
     @Override
-    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String s) throws CloudException, InternalException {
+    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String ownedBy) throws CloudException, InternalException {
+        //listCustomerMachineImages
         return null;  //TODO: Implement for 2013.01
     }
 
@@ -346,6 +379,7 @@ public class ServerImage implements MachineImageSupport {
     	
         return allList;
     }
+
     private Iterable<MachineImage> listCustomerMachineImages() throws InternalException, CloudException {
     	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
     	

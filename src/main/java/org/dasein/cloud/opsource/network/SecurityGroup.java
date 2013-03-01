@@ -75,16 +75,19 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
+    @Deprecated
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
         return authorize(firewallId, direction, Permission.ALLOW, cidr, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
     }
 
     @Override
+    @Deprecated
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
         return authorize(firewallId, direction, permission, cidr, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
     }
 
     @Override
+    @Deprecated
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, @Nonnull RuleTarget destination, int beginPort, int endPort) throws CloudException, InternalException {
         String positionId = getFirstAvaiablePositionForInsertRule(firewallId);
         int precedence = -1;
@@ -118,8 +121,8 @@ public class SecurityGroup implements FirewallSupport {
         else nameElmt.setTextContent(destinationRuleTarget.getCidr());
 
         Element positionElmt = doc.createElement("position");
-
-        String positionId = getFirstAvaiablePositionForInsertRule(firewallId);
+        String positionId = precedence + "";
+        if(precedence <= 0)positionId = getFirstAvaiablePositionForInsertRule(firewallId);
         if(positionId == null){
             throw new CloudException("Can not add firewall Rule because no position availabe to insert the current rule !!!");
         }else{
@@ -198,18 +201,48 @@ public class SecurityGroup implements FirewallSupport {
         Element portRange = doc.createElement("portRange");
         Element portRangeType = doc.createElement("type");
         if(!protocol.equals(Protocol.IPSEC)){
-            portRangeType.setTextContent("EQUAL_TO");
+            if(beginPort <= 0 && endPort <= 0){
+                portRangeType.setTextContent("ALL");
+                portRange.appendChild(portRangeType);
+            }
+            else if(beginPort <= 0 && endPort > 0){
+                portRangeType.setTextContent("LESS_THAN");
 
-            Element port = doc.createElement("port1");
-            port.setTextContent(String.valueOf(beginPort));
-            portRange.appendChild(portRangeType);
-            portRange.appendChild(port);
+                Element port = doc.createElement("port1");
+                port.setTextContent(String.valueOf(endPort));
+
+                portRange.appendChild(portRangeType);
+                portRange.appendChild(port);
+            }
+            else if(beginPort > 0 && endPort <= 0){
+                portRangeType.setTextContent("GREATER_THAN");
+
+                Element port = doc.createElement("port1");
+                port.setTextContent(String.valueOf(beginPort));
+
+                portRange.appendChild(portRangeType);
+                portRange.appendChild(port);
+            }
+            else{
+                portRangeType.setTextContent("EQUAL_TO");
+
+                Element port = doc.createElement("port1");
+                port.setTextContent(String.valueOf(beginPort));
+
+                portRange.appendChild(portRangeType);
+                portRange.appendChild(port);
+                if(beginPort != endPort){
+                    portRangeType.setTextContent("RANGE");
+                    Element port2 = doc.createElement("port2");
+                    port2.setTextContent(String.valueOf(endPort));
+                    portRange.appendChild(port2);
+                }
+            }
         }
         else{
             portRangeType.setTextContent("ALL");
             portRange.appendChild(portRangeType);
         }
-
 
         Element type = doc.createElement("type");
         type.setTextContent(direction.equals(Direction.INGRESS) ? "OUTSIDE_ACL" : "INSIDE_ACL");
@@ -225,46 +258,35 @@ public class SecurityGroup implements FirewallSupport {
         aclRule.appendChild(type);
         doc.appendChild(aclRule);
 
-        System.out.println("Sending this rule:");
-        try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(doc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
-
         OpSourceMethod method = new OpSourceMethod(provider,
                 provider.buildUrl(null,true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
         Document responseDoc = method.invoke();
 
-        System.out.println("Response:");
+        String errorMsg = "";
         try{
-            TransformerFactory transfac = TransformerFactory.newInstance();
-            Transformer trans = transfac.newTransformer();
-            trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            trans.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            StringWriter sw = new StringWriter();
-            StreamResult result = new StreamResult(sw);
-            DOMSource source = new DOMSource(responseDoc);
-            trans.transform(source, result);
-            String xmlString = sw.toString();
-            System.out.println(xmlString);
+            Node item = responseDoc.getDocumentElement();
+            String sNS = "";
+            try{
+                sNS = item.getNodeName().substring(0, item.getNodeName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            NodeList matches = item.getChildNodes();
+            if(matches != null){
+                boolean error = false;
+                for(int i=0;i<matches.getLength();i++){
+                    Node node = matches.item(i);
+                    if(node.getNodeName().equals(sNS + "result") && node.getFirstChild().getNodeValue() != null){
+                        if(node.getFirstChild().getNodeValue().equalsIgnoreCase("error"))error = true;
+                    }
+                    else if(error && node.getNodeName().equals(sNS + "resultDetail") && node.getFirstChild().getNodeValue() != null){
+                        errorMsg = node.getFirstChild().getNodeValue();
+                    }
+                }
+            }
         }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
+        catch(Exception ex){}
+        if(!errorMsg.equals(""))throw new CloudException(errorMsg);
 
         Node item = responseDoc.getDocumentElement();
         String sNS = "";
@@ -277,7 +299,6 @@ public class SecurityGroup implements FirewallSupport {
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
                 if(node.getNodeName().equals(sNS + "id") && node.getFirstChild().getNodeValue() != null ){
-                    System.out.println("Returning this value: " + node.getFirstChild().getNodeValue() + ":" + positionId);
                     return node.getFirstChild().getNodeValue() + ":" + positionId;
                 }
 
@@ -410,12 +431,11 @@ public class SecurityGroup implements FirewallSupport {
     	if(list == null){
     		return null;
     	}
-    	
+
     	for(int i = 100;i<= 500;i ++){
     		String position = String.valueOf(i);
     		boolean isExist = false;
     		for(FirewallRule rule: list){
-
                 if(position.equals(getFirewallPositionIdFromDaseinRuleId(rule.getProviderRuleId()))){
     				isExist = true;
     				break;
@@ -539,26 +559,43 @@ public class SecurityGroup implements FirewallSupport {
 
     @Nonnull
     @Override
-    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean b) throws InternalException, CloudException {
-        return null;  //TODO: Implement for 2013.01
+    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
+        Collection<RuleTargetType> destTypes = new ArrayList<RuleTargetType>();
+        if (!inVlan) {
+            destTypes.add(RuleTargetType.CIDR);
+            destTypes.add(RuleTargetType.GLOBAL);
+        }
+        return destTypes;
     }
 
     @Override
-    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean b) throws InternalException, CloudException{
-        return null; //TODO: Implement for 2013.02
+    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException{
+        Collection<RuleTargetType> sourceTypes = new ArrayList<RuleTargetType>();
+        if (!inVlan) {
+            sourceTypes.add(RuleTargetType.CIDR);
+            sourceTypes.add(RuleTargetType.GLOBAL);
+        }
+        return sourceTypes;
     }
 
     @Override
-    public Iterable<Direction> listSupportedDirections(boolean b) throws InternalException, CloudException{
-        return null; //TODO: Implement for 2013.02
+    public Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException{
+        Collection<Direction> directions = new ArrayList<Direction>();
+        if (!inVlan) {
+            directions.add(Direction.EGRESS);
+            directions.add(Direction.INGRESS);
+        }
+        return directions;
     }
 
     @Nonnull
     @Override
-    public Iterable<Permission> listSupportedPermissions(boolean b) throws InternalException, CloudException {
-        ArrayList<Permission> permissions = new ArrayList<Permission>();
-        permissions.add(Permission.ALLOW);
-        permissions.add(Permission.DENY);
+    public Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
+        Collection<Permission> permissions = new ArrayList<Permission>();
+        if (!inVlan) {
+            permissions.add(Permission.ALLOW);
+            permissions.add(Permission.DENY);
+        }
         return permissions;
     }
 
@@ -783,7 +820,7 @@ public class SecurityGroup implements FirewallSupport {
             	
             	if(value.equalsIgnoreCase("TCP")){
             		protocol = Protocol.TCP;
-            	}else if (value.equalsIgnoreCase("UPD")){
+            	}else if (value.equalsIgnoreCase("UDP")){
             		protocol = Protocol.UDP;
             	}else if (value.equalsIgnoreCase("ICMP") ){
             		protocol = Protocol.ICMP;

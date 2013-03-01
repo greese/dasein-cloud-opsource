@@ -18,10 +18,8 @@
 
 package org.dasein.cloud.opsource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Locale;
+import java.io.StringWriter;
+import java.util.*;
 
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
@@ -33,6 +31,12 @@ import org.dasein.cloud.dc.Region;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 public class OpSourceLocation implements DataCenterServices {
 	
@@ -109,31 +113,99 @@ public class OpSourceLocation implements DataCenterServices {
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.LOCATION_BASE_PATH, null);
     	parameters.put(0, param);
-    			
-    	/*OpSourceMethod method = new OpSourceMethod(provider,
+
+        String cloudName = getCloudNameFromEndpoint();
+        if(cloudName == null){
+            //Error retrieving cloud from endpoint, use old method
+            /*OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-    	
-		Document doc = method.invoke();*/
-        Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
-        String sNS = "";
-        try{
-            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+		    Document doc = method.invoke();*/
+            Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
+            String sNS = "";
+            try{
+                sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            NodeList blocks = doc.getElementsByTagName(sNS + "datacenterWithLimits");
+            if(blocks != null){
+                for(int i=0; i< blocks.getLength();i++){
+                    Node item = blocks.item(i);
+                    Region region = toRegion(item, sNS);
+                    if(region != null){
+                        list.add(region);
+                        provider.setRegionEndpoint(region.getProviderRegionId(), provider.getContext().getEndpoint());
+                    }
+                }
+            }
         }
-        catch(IndexOutOfBoundsException ex){}
-		NodeList blocks = doc.getElementsByTagName(sNS + "datacenterWithLimits");
-		if(blocks != null){
-			for(int i=0; i< blocks.getLength();i++){
-				Node item = blocks.item(i);
-				Region region = toRegion(item, sNS);
-				if(region != null){
-					list.add(region);						
-				}
-			}				
-	    }		
-		return list;
-	}	
-	private Region toRegion( Node region, String nameSpace) throws CloudException{
+        else{
+            HashMap<String, ArrayList<String>> endpointMap = provider.getProivderEndpointMap();
+            ArrayList<String> currentCloudEndpoints = endpointMap.get(cloudName);
+            for(String endpoint : currentCloudEndpoints){
+                try{
+                    String t = endpoint.toLowerCase();
+                    if(!(t.startsWith("http://") || t.startsWith("https://") || t.matches("^[a-z]+://.*"))){
+                        endpoint = "https://" + endpoint;
+                    }
+
+                    OpSourceMethod method = new OpSourceMethod(provider,
+                            provider.buildUrlWithEndpoint(endpoint, null,true, parameters),
+                            provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+                    Document doc = method.invoke();
+
+                    //Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
+                    String sNS = "";
+                    try{
+                        sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+                    }
+                    catch(IndexOutOfBoundsException ex){}
+                    NodeList blocks = doc.getElementsByTagName(sNS + "datacenterWithLimits");
+                    if(blocks != null){
+                        for(int i=0; i< blocks.getLength();i++){
+                            Node item = blocks.item(i);
+                            Region region = toRegion(item, sNS);
+                            if(region != null){
+                                list.add(region);
+                                provider.setRegionEndpoint(region.getProviderRegionId(), endpoint);
+                            }
+                        }
+                    }
+                }
+                catch(Exception ex){
+                    System.out.println("OpSourceLocation error");
+                    ex.printStackTrace();
+                    /*
+                    If this fails it is likely a 401 authentication error against the endpoint.
+                    Rather than getting a nice XML API error response however, OpSource returns the default apache htaccess 401 error
+                    so it fails to parse and throws an exception. We're not really interested in this exception as some accounts
+                    legitimately don't have access to all the endpoints.
+                     */
+                }
+            }
+        }
+        return list;
+	}
+
+    public String getCloudNameFromEndpoint(){
+        String endpoint = provider.getEndpoint(null);
+        endpoint = endpoint.substring(endpoint.indexOf("://") + 3);
+        if(endpoint.contains("/oec/0.9/"))endpoint = endpoint.substring(0, endpoint.indexOf("/oec/0.9/"));
+
+        HashMap<String, ArrayList<String>> endpointMap = provider.getProivderEndpointMap();
+        Set<Map.Entry<String, ArrayList<String>>> endpointList = endpointMap.entrySet();
+        Iterator<Map.Entry<String, ArrayList<String>>> it = endpointList.iterator();
+        while(it.hasNext()){
+            Map.Entry<String, ArrayList<String>> current = it.next();
+            ArrayList<String> endpoints = current.getValue();
+            for(int i=0;i<endpoints.size();i++){
+                if(endpoints.get(i).equals(endpoint))return current.getKey();
+            }
+        }
+        return null;
+    }
+
+	public Region toRegion( Node region, String nameSpace) throws CloudException{
 		if(region == null){
 			return null;
 		}
@@ -141,7 +213,8 @@ public class OpSourceLocation implements DataCenterServices {
 		NodeList data;
     	
 		data = region.getChildNodes();
-		
+
+        String country = "US";
 		Region r = new Region();
 		for( int i=0; i<data.getLength(); i++ ) {
 			Node item = data.item(i);
@@ -153,23 +226,26 @@ public class OpSourceLocation implements DataCenterServices {
 			else if( item.getNodeName().equals(nameSpace + "displayName") ) {
 				r.setName(item.getFirstChild().getNodeValue());
 			}
+            else if(item.getNodeName().equals(nameSpace + "country")){
+                country = item.getFirstChild().getNodeValue();
+            }
 		}	
 		r.setActive(true);
 		r.setAvailable(true);
-		String host = provider.getEndpointURL().getHost();
-		
-		if(  host.contains("eu")) {
-		    r.setJurisdiction("EU");
-		}
-		else if( host.contains("au") ) {
-		    r.setJurisdiction("AU");
-		}
-		else if( host.contains("af") ) {
-		    r.setJurisdiction("ZA");
-		}
-		else  {
-		    r.setJurisdiction("US");
-		}
+
+        if(country.equals("US")){
+            r.setJurisdiction("US");
+        }
+        else if(country.equals("Australia")){
+            r.setJurisdiction("AU");
+        }
+        else if(country.equals("South Africa")){
+            r.setJurisdiction("ZA");
+        }
+        else{
+            //The only one where the country is different
+            r.setJurisdiction("EU");
+        }
 		return r;
 	}
 }
