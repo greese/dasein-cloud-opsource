@@ -848,7 +848,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 		}
 
 		Element vlanResourcePath = doc.createElement("vlanResourcePath");
-		vlanResourcePath.setTextContent(provider.getVlanResourcePathFromVlanId(withVlanId));
+		vlanResourcePath.setTextContent(provider.getVlanResourcePathFromVlanId(withVlanId, provider.getContext().getRegionId()));
 
 		Element imageResourcePath = doc.createElement("imageResourcePath");
 		imageResourcePath.setTextContent(provider.getImageResourcePathFromImaged(imageId));

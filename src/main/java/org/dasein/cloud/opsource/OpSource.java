@@ -22,9 +22,7 @@ import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -53,6 +51,7 @@ import org.dasein.cloud.opsource.compute.OpSourceComputeServices;
 import org.dasein.cloud.opsource.network.OpSourceNetworkServices;
 import org.w3c.dom.Document;
 
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 
@@ -129,12 +128,12 @@ public class OpSource extends AbstractCloud {
 	private String defaultRegionId = null;
 	private String defaultAdminPasswordForVM = null;
 
-    private HashMap<String, String> region2EndpointMap = new HashMap<String, String>();
+    private static HashMap<String, String> region2EndpointMap = new HashMap<String, String>();
 	
 	public String buildUrl(String command, boolean isDeployed, Map<Integer, Param> parameters) throws InternalException, CloudException {
 		StringBuilder str = new StringBuilder();
 
-        String endpoint = getEndpoint();
+        String endpoint = getEndpoint(getContext().getRegionId());
         str.append(endpoint);
         if(endpoint != null && !endpoint.contains("oec/0.9")){
         	if(endpoint.endsWith("/")){
@@ -144,7 +143,7 @@ public class OpSource extends AbstractCloud {
         	}        	
         }
         if(isDeployed){
-        	str.append("/"+ getOrgId());
+        	str.append("/"+ getOrgId(endpoint));
         }else{
         	str.append("/"+ "base");
         }
@@ -185,6 +184,59 @@ public class OpSource extends AbstractCloud {
 
         return str.toString();
     }
+
+    public String buildUrlWithEndpoint(String endpoint, String command, boolean isDeployed, Map<Integer, Param> parameters) throws InternalException, CloudException {
+        StringBuilder str = new StringBuilder();
+
+        str.append(endpoint);
+        if(endpoint != null && !endpoint.contains("oec/0.9")){
+            if(endpoint.endsWith("/")){
+                str.append("oec/0.9");
+            }else{
+                str.append("/oec/0.9");
+            }
+        }
+        if(isDeployed){
+            str.append("/"+ getOrgId(endpoint));
+        }else{
+            str.append("/"+ "base");
+        }
+        for(int i=0 ; i<parameters.size(); i++ ){
+            Param param = parameters.get(i);
+            String value = param.getValue();
+            if(value==null){
+                str.append("/"+param.getKey());
+            }
+        }
+
+        if(command !=null ){
+            str.append("?");
+            str.append(command);
+        }
+
+        boolean firstPara = true;
+
+        for(int i=0 ; i<parameters.size(); i++ ){
+            Param param = parameters.get(i);
+            String value = param.getValue();
+
+            if(value!=null){
+                if(firstPara && command ==null  ){   //&& command ==null
+                    str.append("?");
+                    str.append(param.getKey());
+                    str.append("=");
+                    str.append(param.getValue());
+                    firstPara = false;
+                }else{
+                    str.append("&");
+                    str.append(param.getKey());
+                    str.append("=");
+                    str.append(param.getValue());
+                }
+            }
+        }
+        return str.toString();
+    }
 	
 	public Document createDoc() throws InternalException{
 		try {
@@ -215,8 +267,8 @@ public class OpSource extends AbstractCloud {
 		}
 	}
 	
-	public String getVlanResourcePathFromVlanId(@Nonnull String vlanId) throws InternalException, CloudException{
-		return "/oec/"+ getOrgId()+"/network/" + vlanId;
+	public String getVlanResourcePathFromVlanId(@Nonnull String vlanId, String endpoint) throws InternalException, CloudException{
+		return "/oec/"+ getOrgId(endpoint)+"/network/" + vlanId;
 	}
 
 	public String getVlanIdFromVlanResourcePath(@Nonnull String vlanResourcePath) throws InternalException, CloudException{
@@ -287,16 +339,16 @@ public class OpSource extends AbstractCloud {
 	}
 	
 	//Return the request url for data and region services
-	public String getRegionServiceUrl() throws CloudException, InternalException{
-		String orgIdUrl = getOrgUrl();
+	public String getRegionServiceUrl(String regionId) throws CloudException, InternalException{
+		String orgIdUrl = getOrgUrl(regionId);
 		String requestPara = "datacenterWithLimits";
 		return orgIdUrl+ requestPara;		
 	}
 	
 	//Return the request url for data and region services
-	public String getOrgUrl() throws CloudException, InternalException{
+	public String getOrgUrl(String regionId) throws CloudException, InternalException{
         String basicUrl = this.getBasicUrl();
-        String orgId = this.getOrgId();
+        String orgId = this.getOrgId(getEndpoint(regionId));
 
         if(basicUrl != null && orgId != null ){
             return basicUrl+ "/" + orgId + "/";
@@ -316,25 +368,38 @@ public class OpSource extends AbstractCloud {
 		}	
 	}
 	
-	public String getEndpoint(){
+	public String getEndpoint(String regionId){
         String endpoint = getContext().getEndpoint();
+        if(regionId != null){
+            if(region2EndpointMap == null || !region2EndpointMap.containsKey(regionId)){
+                OpSourceLocation opsLocation = new OpSourceLocation(this);
+                try{
+                    opsLocation.listRegions();
+                }
+                catch(CloudException ex){
+                    //TODO: Something with these exceptions
+                }
+                catch(InternalException ex){
+
+                }
+            }
+            endpoint = region2EndpointMap.get(regionId);
+        }
         if(endpoint == null){
             return null;
         }
         else{
             String t = endpoint.toLowerCase();
-            if(!(t.startsWith("http://") 
-                    || t.startsWith("https://")
-                    || t.matches("^[a-z]+://.*"))){
-            	endpoint = "http://" + endpoint;              
+            if(!(t.startsWith("http://") || t.startsWith("https://") || t.matches("^[a-z]+://.*"))){
+            	endpoint = "https://" + endpoint;
             }
         }
         return endpoint;
 	}
 	
-	public URL getEndpointURL() throws CloudException{
+	public URL getEndpointURL(String regionId) throws CloudException{
 		try {
-			return new URL(getEndpoint());
+			return new URL(getEndpoint(regionId));
 		} catch (MalformedURLException e) {
 			throw new CloudException("Wrong endpoint");
 		}
@@ -342,10 +407,10 @@ public class OpSource extends AbstractCloud {
 	}
 	
 	
-	public String getOrgId() throws InternalException,CloudException{
+	public String getOrgId(String endpoint) throws InternalException,CloudException{
 		if(orgId == null){
 			//String url = "https://api.opsourcecloud.net/oec/0.9/myaccount";
-            String url = getEndpoint() + "/oec/0.9/myaccount";
+            String url = endpoint + "/oec/0.9/myaccount";
 			HashMap<String,String> parameters = new HashMap<String,String>();
 			
 			parameters.put(Content_Type_Key, Content_Type_Value_Single_Para);
@@ -385,6 +450,7 @@ public class OpSource extends AbstractCloud {
         endpointList.add("euapi.opsourcecloud.net");
         endpointList.add("auapi.opsourcecloud.net");
         endpointList.add("afapi.opsourcecloud.net");
+        endpointList.add("apapi.opsourcecloud.net");
         map.put(providerName, endpointList);
 
         providerName = OpSource_Dimension_Name;
@@ -409,6 +475,7 @@ public class OpSource extends AbstractCloud {
         endpointList.add("eucloudapi.nttamerica.com");
         endpointList.add("aucloudapi.nttamerica.com");
         endpointList.add("sacloudapi.nttamerica.com");
+        endpointList.add("hkcloudapi.nttamerica.com");
         map.put(providerName, endpointList);
 
         providerName = OpSource_NTTE_Name;
@@ -549,7 +616,7 @@ public class OpSource extends AbstractCloud {
                 try {
             		//Document doc = method.invoke();
                     //HashMap<Integer, Param> parameters = (HashMap)getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null);
-                    Document doc = CallCache.getInstance().getAPICall(LOCATION_BASE_PATH, this, new HashMap<Integer, Param>(), getRegionServiceUrl());
+                    Document doc = CallCache.getInstance().getAPICall(LOCATION_BASE_PATH, this, new HashMap<Integer, Param>(), getRegionServiceUrl(null));
             		if( logger.isDebugEnabled()) {
             			logger.debug("Found regions: "+ convertDomToString(doc));
             		}
