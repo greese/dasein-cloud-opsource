@@ -55,7 +55,7 @@ public class Network implements VLANSupport {
 
     @Override
     public boolean allowsNewSubnetCreation() throws CloudException, InternalException {
-        return true;
+        return false;
     }
 
     @Override
@@ -522,7 +522,7 @@ public class Network implements VLANSupport {
 	 		                else if( ipItem.getNodeName().equals(sNS + "baseIp") && ipItem.getFirstChild().getNodeValue() != null ) {
 	 		                	baseIp = ipItem.getFirstChild().getNodeValue();
 	 		                }
-	 		                else if( ipItem.getNodeName().equals(sNS + "subnetSiz") && ipItem.getFirstChild().getNodeValue() != null ) {
+	 		                else if( ipItem.getNodeName().equals(sNS + "subnetSize") && ipItem.getFirstChild().getNodeValue() != null ) {
 	 		                	String itemValue = ipItem.getFirstChild().getNodeValue();
 	 		                	if(isNumeric(itemValue)){
 	 		                		mask =  32 - (int) Math.log(Integer.valueOf(itemValue));
