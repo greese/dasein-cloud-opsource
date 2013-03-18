@@ -364,6 +364,9 @@ config
         }
         catch(IndexOutOfBoundsException ex){}
         NodeList matches = doc.getElementsByTagName(sNS + "publicIps");
+
+        String publicBlockId = "";
+        boolean serverToVip = false;
         if(matches != null){
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node item = matches.item(i); 
@@ -373,19 +376,41 @@ config
                 	 Node node = ipblocks.item(j); 
                 	 if(node.getNodeType() == Node.TEXT_NODE) continue;
                 	 if(node.getNodeName().equals(sNS + "IpBlock")){
-                    	ArrayList<IpAddress> list = (ArrayList<IpAddress>) toPublicAddress(node, networkId, sNS);
+                    	ArrayList<OpSourceIP> list = (ArrayList<OpSourceIP>)toPublicAddress(node, networkId, sNS);
                     	if(list == null) continue;         	
            		
-                		for(org.dasein.cloud.network.IpAddress ip: list){
+                		for(OpSourceIP ip: list){
                 			
                 			if(unassignedOnly && (ip.getProviderLoadBalancerId() != null || ip.getServerId() != null)){
                 				continue;           
                 			}
+                            if(ip.getServerToVip())serverToVip = true;
+                            publicBlockId = ip.getProviderIpBlockId();
                 			addresses.add(ip);
                 		}
                 	 }
                 }
             }
+        }
+
+        if(!serverToVip){
+            parameters = new HashMap<Integer, Param>();
+            param = new Param("network", null);
+            parameters.put(0, param);
+
+            param = new Param(networkId, null);
+            parameters.put(1, param);
+
+            param = new Param("publicip", null);
+            parameters.put(2, param);
+
+            param = new Param(publicBlockId, null);
+            parameters.put(3, param);
+
+            OpSourceMethod serverVipMethod = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Modify, "POST", "serverToVipConnectivity=true"));
+            serverVipMethod.invoke();
         }
         return addresses;
     }
@@ -595,14 +620,16 @@ config
 	     }	    
     }
  
-    private Collection<IpAddress> toPublicAddress(Node node, String networkId, String nameSpace) throws InternalException, CloudException {
-        ArrayList<IpAddress> list = new ArrayList<IpAddress> ();
+    private Collection<OpSourceIP> toPublicAddress(Node node, String networkId, String nameSpace) throws InternalException, CloudException {
+        ArrayList<OpSourceIP> list = new ArrayList<OpSourceIP> ();
                  
-    	IpAddress address = null;
+    	OpSourceIP address = null;
         NodeList attributes = node.getChildNodes();      
 
         String baseIp = null;
         int ipSize = 0;
+        String blockId = "";
+        boolean serverToVip = false;
         
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node n = attributes.item(i);
@@ -616,7 +643,7 @@ config
                 continue;
             }
             if( name.equalsIgnoreCase(nameSpace + "id") ) {
-            	//
+            	blockId = value;
             }
             else if(name.equalsIgnoreCase(nameSpace + "baseIp") ) {
                 baseIp = value;
@@ -626,7 +653,10 @@ config
             }
             else if( name.equalsIgnoreCase(nameSpace + "networkDefault") ) {
             	//
-            } 
+            }
+            else if(name.equalsIgnoreCase(nameSpace + "serverToVipConnectivity")){
+                serverToVip = Boolean.parseBoolean(value);
+            }
         }    
         
         if(baseIp != null && ipSize >0 ){
@@ -642,13 +672,16 @@ config
         	for(int i=0;i < ipSize ; i++){
         		int lastSection = lastValue + i;
         		String addressId = prefix + lastSection;
-        		address =  new IpAddress();
+        		address =  new OpSourceIP();
 
                 address.setAddressType(AddressType.PUBLIC);
         		address.setRegionId(provider.getContext().getRegionId());
 
         		address.setIpAddressId(addressId);
         		address.setAddress(addressId);
+
+                address.setProviderIpBlockId(blockId);
+                address.setServerToVip(serverToVip);
         		
         		//Set LB Id
                 for(LoadBalancer lb : lbs){
@@ -823,5 +856,26 @@ config
     	public String getVlanId(){
     		return vlanId;
     	}  
+    }
+
+    public class OpSourceIP extends IpAddress{
+        private String providerIpBlockId;
+        private boolean serverToVip;
+
+        public String getProviderIpBlockId(){
+            return providerIpBlockId;
+        }
+
+        public void setProviderIpBlockId(String providerIpBlockId){
+            this.providerIpBlockId = providerIpBlockId;
+        }
+
+        public boolean getServerToVip(){
+            return serverToVip;
+        }
+
+        public void setServerToVip(boolean serverToVip){
+            this.serverToVip = serverToVip;
+        }
     }
 }
