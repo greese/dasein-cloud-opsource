@@ -140,6 +140,7 @@ public class PublicIPPool {
                         String currentId = "";
                         String currentBaseIp = "";
                         int currentBlockSize = 0;
+                        boolean currentNetworkDefault = false;
 
                         NodeList currentBlock = node.getChildNodes();
                         for(int k=0;k<currentBlock.getLength();k++){
@@ -154,9 +155,12 @@ public class PublicIPPool {
                             else if(blockInfo.getNodeName().equals(sNS + "subnetSize")){
                                 currentBlockSize = Integer.parseInt(blockInfo.getFirstChild().getNodeValue());
                             }
+                            else if(blockInfo.getNodeName().equals(sNS + "networkDefault")){
+                                currentNetworkDefault = Boolean.parseBoolean(blockInfo.getFirstChild().getNodeValue());
+                            }
                         }
                         ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
-                        PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips);
+                        PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips, currentNetworkDefault);
                         ipBlocks.add(block);
                     }
                 }
@@ -202,6 +206,7 @@ public class PublicIPPool {
                         String currentId = "";
                         String currentBaseIp = "";
                         int currentBlockSize = 0;
+                        boolean currentNetworkDefault = false;
 
                         NodeList currentBlock = node.getChildNodes();
                         for(int k=0;k<currentBlock.getLength();k++){
@@ -223,10 +228,13 @@ public class PublicIPPool {
                             else if(blockInfo.getNodeName().equals(sNS + "subnetSize") && requiredBlock){
                                 currentBlockSize = Integer.parseInt(blockInfo.getFirstChild().getNodeValue());
                             }
+                            else if(blockInfo.getNodeName().equals(sNS + "networkDefault")){
+                                currentNetworkDefault = Boolean.parseBoolean(blockInfo.getFirstChild().getNodeValue());
+                            }
                         }
                         if(requiredBlock){
                             ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
-                            PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips);
+                            PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips, currentNetworkDefault);
                             return block;
                         }
                     }
@@ -303,15 +311,21 @@ public class PublicIPPool {
         throw new InternalException("An error occured allocating a public IP address");
     }
 
-    public void detachPublicIp(String providerVlanId, String publicIpAddress)throws InternalException, CloudException{
+    public void detachPublicIp(String providerVlanId, String providerServerId)throws InternalException, CloudException{
         ArrayList<NatRule> natRules = (ArrayList<NatRule>)listNatRules(providerVlanId);
+        VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(providerServerId);
 
         NatRule rule = null;
         for(int i=0;i<natRules.size();i++){
             NatRule currentRule = natRules.get(i);
-            if(currentRule.getNatIp().equals(publicIpAddress)){
-                rule = currentRule;
-                break;
+            RawAddress[] publicAddresses = vm.getPublicAddresses();
+            if(publicAddresses != null){
+                for(RawAddress address : publicAddresses){
+                    if(currentRule.getNatIp().equals(address.getIpAddress())){
+                        rule = currentRule;
+                        break;
+                    }
+                }
             }
         }
         if(rule != null){
@@ -365,7 +379,7 @@ public class PublicIPPool {
         if(matches != null){
             for(int i = 0; i< matches.getLength();i++){
                 Node node = matches.item(i);
-                NatRule rule = this.toNatRule(node, sNS);
+                NatRule rule = toNatRule(node, sNS);
                 if(rule != null){
                     rule.setVlanId(providerVlanId);
                     list.add(rule);
@@ -405,9 +419,8 @@ public class PublicIPPool {
                 rule.setSourceIp(value);
             }
         }
-        if(rule != null && rule.getId() != null
-                && rule.getNatIp() != null
-                && rule.getSourceIp() != null){
+
+        if(rule != null && rule.getId() != null && rule.getNatIp() != null && rule.getSourceIp() != null){
             return rule;
         }else{
             return null;
@@ -418,11 +431,13 @@ public class PublicIPPool {
         String id;
         String vlanId;
         ArrayList<IpAddress> addresses;
+        boolean networkDefault = false;
 
-        PublicIPBlock(String id, String vlanId, ArrayList<IpAddress> addresses){
+        PublicIPBlock(String id, String vlanId, ArrayList<IpAddress> addresses, boolean networkDefault){
             this.id = id;
             this.vlanId = vlanId;
             this.addresses = addresses;
+            this.networkDefault = networkDefault;
         }
 
         public String getId(){
@@ -435,6 +450,10 @@ public class PublicIPPool {
 
         public ArrayList<IpAddress> getAddresses(){
             return addresses;
+        }
+
+        public boolean getNetworkDefault(){
+            return networkDefault;
         }
     }
 
