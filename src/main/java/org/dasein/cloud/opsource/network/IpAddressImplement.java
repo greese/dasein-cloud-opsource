@@ -517,6 +517,26 @@ config
     	
     	method.requestResult("Release Ip from server",method.invoke());
     }
+
+    public void deleteNatRule(@Nonnull NatRule rule) throws InternalException, CloudException{
+        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+        parameters.put(0, param);
+        param = new Param(rule.getVlanId(), null);
+        parameters.put(1, param);
+
+        param = new Param("natrule", null);
+        parameters.put(2, param);
+
+        param = new Param(rule.getId(), null);
+        parameters.put(3, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl("delete",true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+
+        method.requestResult("Release Ip from server",method.invoke());
+    }
     
     /**
      * Opsource does not support reserve one IP address
