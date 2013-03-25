@@ -561,30 +561,24 @@ public class SecurityGroup implements FirewallSupport {
     @Override
     public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
         Collection<RuleTargetType> destTypes = new ArrayList<RuleTargetType>();
-        if (!inVlan) {
             destTypes.add(RuleTargetType.CIDR);
             destTypes.add(RuleTargetType.GLOBAL);
-        }
         return destTypes;
     }
 
     @Override
     public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException{
         Collection<RuleTargetType> sourceTypes = new ArrayList<RuleTargetType>();
-        if (!inVlan) {
             sourceTypes.add(RuleTargetType.CIDR);
             sourceTypes.add(RuleTargetType.GLOBAL);
-        }
         return sourceTypes;
     }
 
     @Override
     public Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException{
         Collection<Direction> directions = new ArrayList<Direction>();
-        if (!inVlan) {
             directions.add(Direction.EGRESS);
             directions.add(Direction.INGRESS);
-        }
         return directions;
     }
 
@@ -592,10 +586,8 @@ public class SecurityGroup implements FirewallSupport {
     @Override
     public Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
         Collection<Permission> permissions = new ArrayList<Permission>();
-        if (!inVlan) {
             permissions.add(Permission.ALLOW);
             permissions.add(Permission.DENY);
-        }
         return permissions;
     }
 
