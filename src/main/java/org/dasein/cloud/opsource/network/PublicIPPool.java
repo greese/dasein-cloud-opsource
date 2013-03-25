@@ -160,7 +160,20 @@ public class PublicIPPool {
                             }
                         }
                         ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
-                        PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips, currentNetworkDefault);
+
+                        //Attempt to mark assigned IPs
+                        ArrayList<String> assignedIPs = null;
+                        try{
+                            ArrayList<NatRule> rules = (ArrayList<NatRule>)listNatRules(providerVlanId);
+                            for(NatRule rule : rules){
+                                for(IpAddress ip : ips){
+                                    if(rule.getNatIp().equals(ip.getRawAddress().getIpAddress()))assignedIPs.add(rule.getNatIp());
+                                }
+                            }
+                        }
+                        catch(Exception ex){}
+
+                        PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips, currentNetworkDefault, assignedIPs);
                         ipBlocks.add(block);
                     }
                 }
@@ -234,7 +247,18 @@ public class PublicIPPool {
                         }
                         if(requiredBlock){
                             ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
-                            PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips, currentNetworkDefault);
+                            //Attempt to mark assigned IPs
+                            ArrayList<String> assignedIPs = null;
+                            try{
+                                ArrayList<NatRule> rules = (ArrayList<NatRule>)listNatRules(providerVlanId);
+                                for(NatRule rule : rules){
+                                    for(IpAddress ip : ips){
+                                        if(rule.getNatIp().equals(ip.getRawAddress().getIpAddress()))assignedIPs.add(rule.getNatIp());
+                                    }
+                                }
+                            }
+                            catch(Exception ex){}
+                            PublicIPBlock block = new PublicIPBlock(currentId, providerVlanId, ips, currentNetworkDefault, assignedIPs);
                             return block;
                         }
                     }
@@ -432,8 +456,9 @@ public class PublicIPPool {
         String vlanId;
         ArrayList<IpAddress> addresses;
         boolean networkDefault = false;
+        ArrayList<String> assignedIPs;
 
-        PublicIPBlock(String id, String vlanId, ArrayList<IpAddress> addresses, boolean networkDefault){
+        PublicIPBlock(String id, String vlanId, ArrayList<IpAddress> addresses, boolean networkDefault, ArrayList<String> assignedIPs){
             this.id = id;
             this.vlanId = vlanId;
             this.addresses = addresses;
@@ -454,6 +479,10 @@ public class PublicIPPool {
 
         public boolean getNetworkDefault(){
             return networkDefault;
+        }
+
+        public ArrayList<String> getAssignedIPs(){
+            return assignedIPs;
         }
     }
 
