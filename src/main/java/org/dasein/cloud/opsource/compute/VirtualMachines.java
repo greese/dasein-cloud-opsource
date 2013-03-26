@@ -190,7 +190,6 @@ public class VirtualMachines implements VirtualMachineSupport {
                         newMemory = Integer.parseInt(parts[1]);
                     }
                     catch(NumberFormatException ex){}
-                    System.out.println("Current Ram: " + currentRam);
                     if(newMemory != Integer.parseInt(currentRam) && newMemory != -1){
                         if(newMemory > 0 && newMemory <= 65536){
                             if(isCpuChanged)requestBody += "&";
@@ -213,7 +212,6 @@ public class VirtualMachines implements VirtualMachineSupport {
 
             if(success){
                 String currentProductId = vm.getProductId();
-                System.out.println("current productString: " + currentProductId);
                 if(parts.length >= 3){
                     String currentDiskString = currentProductId.substring(currentProductId.lastIndexOf(":") + 1);
                     if(parts[2].equals(currentDiskString)) return getVirtualMachine(serverId);
@@ -1013,7 +1011,6 @@ public class VirtualMachines implements VirtualMachineSupport {
             ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
             for(int i=0;i<matches.getLength();i++){
                 VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
-                System.out.println("VM Platform: " + vm.getPlatform());
                 if(vm != null)vms.add(vm);
             }
             return vms;
@@ -1574,7 +1571,6 @@ public class VirtualMachines implements VirtualMachineSupport {
             product.setDescription(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");*/
 
             server.setProductId(cpuCount + ":" + memoryInMb + ":" + diskString);
-            System.out.println("Server product String: " + server.getProductId());
         }
         return server;
     }
@@ -1784,7 +1780,6 @@ public class VirtualMachines implements VirtualMachineSupport {
 					Node status = statusAttributes.item(j);
 					if(status.getNodeType() == Node.TEXT_NODE) continue;
 					if( status.getNodeName().equalsIgnoreCase(nameSpaceString + "step") ){
-						//TODO
 						/** If it is this status means it is pending */
 						server.setCurrentState(VmState.PENDING);
 					}
