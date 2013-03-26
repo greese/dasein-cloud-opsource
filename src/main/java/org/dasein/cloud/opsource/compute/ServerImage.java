@@ -89,21 +89,21 @@ public class ServerImage extends AbstractImageSupport {
         APITrace.begin(provider, "Image.getImage");
         try {
             //First check the pending images, because it is mostly being checked by customers
-            ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
+            ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(null);
             for(MachineImage image : list){
                 if(image.getProviderMachineImageId().equals(imageId)){
                     return image;
                 }
             }
 
-            list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
+            list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(null);
             for(MachineImage image : list){
                 if(image.getProviderMachineImageId().equals(imageId)){
                     return image;
                 }
             }
 
-            list = (ArrayList<MachineImage>) listOpSourceMachineImages(ImageFilterOptions.getInstance());
+            list = (ArrayList<MachineImage>) listOpSourceMachineImages(null);
             for(MachineImage image : list){
                 if(image.getProviderMachineImageId().equals(imageId)){
                     return image;
@@ -116,11 +116,22 @@ public class ServerImage extends AbstractImageSupport {
             APITrace.end();
         }
     }
+    
+    @Override
+    @Deprecated
+    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale) {
+        return "OS Image";
+    }
 
     @Nonnull
     @Override
     public String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass imageClass) {
         return "Server Image";  //TODO: Implement for 2013.01
+    }
+
+    @Override
+    public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls){
+        return "Customer Image";
     }
 
     private Architecture guess(String desc) {
@@ -233,9 +244,6 @@ public class ServerImage extends AbstractImageSupport {
 
         return false;
     }
-    
- 
- 
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
@@ -249,7 +257,6 @@ public class ServerImage extends AbstractImageSupport {
         try {
             if( options == null || options.getAccountNumber() == null ) {
                 ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
-
                 ArrayList<MachineImage> list =  (ArrayList<MachineImage>) listCustomerMachineImages(options);
                 if(list != null){
                     allList.addAll(list);
@@ -261,7 +268,6 @@ public class ServerImage extends AbstractImageSupport {
                  if(list != null){
                  allList.addAll(list);
                  }*/
-
                 return allList;
             }
             else {
@@ -281,6 +287,55 @@ public class ServerImage extends AbstractImageSupport {
             APITrace.end();
         }
     }
+
+    @Nonnull
+    @Override
+    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
+        if( logger.isTraceEnabled() ) {
+            logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
+        }
+
+        ArrayList<MachineImage> list = new ArrayList<MachineImage>();
+
+        /** Get OpSource public Image */
+        HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
+        parameters.put(0, param);
+
+        param = new Param(provider.getDefaultRegionId(), null);
+        parameters.put(1, param);
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null, false, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+
+        Document doc = method.invoke();
+
+        NodeList matches = doc.getElementsByTagName(OpSource_IMAGE_TAG);
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node node = matches.item(i);
+
+            MachineImage image = toImage(node,false,false, "");
+
+            if( image != null ) {
+                list.add(image);
+            }
+        }
+
+        if( logger.isTraceEnabled() ) {
+            logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
+        }
+
+        return list;
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String ownedBy) throws CloudException, InternalException {
+        //listCustomerMachineImages
+        return null;  //TODO: Implement for 2013.01
+    }
+
 
     private Iterable<MachineImage> listCustomerMachineImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
     	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();

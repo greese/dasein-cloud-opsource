@@ -64,7 +64,7 @@ public class Network extends AbstractVLANSupport {
 
     @Override
     public boolean allowsNewSubnetCreation() throws CloudException, InternalException {
-        return true;
+        return false;
     }
 
     @Override
@@ -175,12 +175,11 @@ public class Network extends AbstractVLANSupport {
             Document doc = provider.createDoc();
             Element vlan ;
             Element location = null ;
-            if(getContext().getRegionId() == null){
+            if(provider.getContext().getRegionId() == null){
                 param = new Param(OpSource.NETWORK_BASE_PATH, null);
                 vlan = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "Network");
 
-            }
-            else{
+            }else{
                 // Create a network under specific region
                 param = new Param("networkWithLocation", null);
                 vlan = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "NewNetworkWithLocation");
@@ -211,16 +210,11 @@ public class Network extends AbstractVLANSupport {
                     provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
 
             String vlanId = method.getRequestResultId("Creating VLan", method.invoke(), "result", "resultDetail");
-
-            if( vlanId == null ) {
+            if(vlanId != null){
+                return this.getVlan(vlanId);
+            }else{
                 throw new CloudException("Creating VLan fails without explaination !!!");
             }
-            for( VLAN v : fetchVlans() ) {
-                if( v.getProviderVlanId().equals(vlanId) ) {
-                    return v;
-                }
-            }
-            throw new CloudException("Unable to find newly created VLANs among list of VLANs");
         }
         finally {
             APITrace.end();
@@ -483,7 +477,7 @@ public class Network extends AbstractVLANSupport {
 	 		                else if( ipItem.getNodeName().equals(sNS + "baseIp") && ipItem.getFirstChild().getNodeValue() != null ) {
 	 		                	baseIp = ipItem.getFirstChild().getNodeValue();
 	 		                }
-	 		                else if( ipItem.getNodeName().equals(sNS + "subnetSiz") && ipItem.getFirstChild().getNodeValue() != null ) {
+	 		                else if( ipItem.getNodeName().equals(sNS + "subnetSize") && ipItem.getFirstChild().getNodeValue() != null ) {
 	 		                	String itemValue = ipItem.getFirstChild().getNodeValue();
 	 		                	if(isNumeric(itemValue)){
 	 		                		mask =  32 - (int) Math.log(Integer.valueOf(itemValue));

@@ -24,7 +24,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -189,11 +188,8 @@ public class VirtualMachines extends AbstractVMSupport {
                     int newMemory = -1;
                     try{
                         newMemory = Integer.parseInt(parts[1]);
-                        //TODO: This is temporary - RAM should always be in MB
-                        if(newMemory < 100) newMemory = newMemory * 1024;
                     }
                     catch(NumberFormatException ex){}
-                    System.out.println("Current Ram: " + currentRam);
                     if(newMemory != Integer.parseInt(currentRam) && newMemory != -1){
                         if(newMemory > 0 && newMemory <= 65536){
                             if(isCpuChanged)requestBody += "&";
@@ -216,7 +212,6 @@ public class VirtualMachines extends AbstractVMSupport {
 
             if(success){
                 String currentProductId = vm.getProductId();
-                System.out.println("current productString: " + currentProductId);
                 if(parts.length >= 3){
                     String currentDiskString = currentProductId.substring(currentProductId.lastIndexOf(":") + 1);
                     if(parts[2].equals(currentDiskString)) return getVirtualMachine(serverId);
@@ -314,13 +309,13 @@ public class VirtualMachines extends AbstractVMSupport {
     @Nullable
     @Override
     public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
-        return VMScalingCapabilities.getInstance(false, true, Requirement.OPTIONAL, Requirement.OPTIONAL);//TODO: Check that this is correct for 2013.02
+        return VMScalingCapabilities.getInstance(false, true, Requirement.OPTIONAL, Requirement.OPTIONAL);
     }
 
 
     @Override
     public int getCostFactor(@Nonnull VmState vmState) throws InternalException, CloudException {
-        return 100;
+        return (vmState.equals(VmState.STOPPED) ? 0 : 100);
     }
 
     @Override
@@ -506,18 +501,8 @@ public class VirtualMachines extends AbstractVMSupport {
             //String volumeSizes;
             String[] productIds = productString.split(":");
             if (productIds.length == 2) {
-                cpuCount = productIds[0];
-                ramSize = productIds[1];
-                try{
-                    //TODO: This is temporary - All ram should be in MB
-                    if(Integer.parseInt(ramSize) < 100){
-                        ramSize = (Integer.parseInt(ramSize) * 1024) + "";
-                    }
-                }
-                catch(NumberFormatException ex){
-                    throw new InternalException("Invalid value specified for RAM in product id string");
-                }
-                //volumeSizes = productIds[2];
+            	cpuCount = productIds[0];
+            	ramSize = productIds[1];
             }
             else {
                 throw new InternalError("Invalid product id string");
@@ -543,6 +528,7 @@ public class VirtualMachines extends AbstractVMSupport {
             }
 
             String password = getRandomPassword();
+            if(withLaunchOptions.getBootstrapPassword() != null && !withLaunchOptions.getBootstrapPassword().equals(""))password = withLaunchOptions.getBootstrapPassword();
             //if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
             if(currentCPU == targetCPU && currentMemory == targetMemory){
                 if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ) {
@@ -577,6 +563,7 @@ public class VirtualMachines extends AbstractVMSupport {
             }
 
             final VirtualMachine server = getVirtualMachineByName(name);
+            server.setRootPassword(password);
 
             /** update the hardware (CPU, memory configuration)*/
             if(server == null){
@@ -780,7 +767,7 @@ public class VirtualMachines extends AbstractVMSupport {
             }
 
             Element vlanResourcePath = doc.createElement("vlanResourcePath");
-            vlanResourcePath.setTextContent(provider.getVlanResourcePathFromVlanId(withVlanId));
+            vlanResourcePath.setTextContent(provider.getVlanResourcePathFromVlanId(withVlanId, provider.getContext().getRegionId()));
 
             Element imageResourcePath = doc.createElement("imageResourcePath");
             imageResourcePath.setTextContent(provider.getImageResourcePathFromImaged(imageId));
@@ -944,116 +931,112 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public Iterable<Architecture> listSupportedArchitectures() throws InternalException, CloudException {
-        return Collections.singletonList(Architecture.I64);
+        ArrayList<Architecture> list = new ArrayList<Architecture>();
+        list.add(Architecture.I64);
+        list.add(Architecture.I32);
+        return list;
+    }
+
+    @Nonnull
+    @Override
+    public Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
+        ArrayList<ResourceStatus> list = new ArrayList<ResourceStatus>();
+        for(VirtualMachine vm : listVirtualMachines()){
+            ResourceStatus status = new ResourceStatus(vm.getProviderVirtualMachineId(), vm.getCurrentState());
+            list.add(status);
+        }
+        return list;
     }
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "VM.listVirtualMachines");
-        try {
-            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-            Param param = new Param(OpSource.SERVER_WITH_STATE, null);
-            parameters.put(0, param);
+        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.SERVER_WITH_STATE, null);
+        parameters.put(0, param);
 
-            OpSourceMethod method = new OpSourceMethod(provider,
-                    provider.buildUrl(null, true, parameters),
-                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null, true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
 
-            Document doc = method.invoke();
-            NodeList  matches = doc.getElementsByTagName("serverWithState");
-            if(matches != null){
-                ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
-                for(int i=0;i<matches.getLength();i++){
-                    VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
-                    if( vm != null ) {
-                        vms.add(vm);
-                    }
-                }
-                return vms;
+        Document doc = method.invoke();
+        NodeList  matches = doc.getElementsByTagName("serverWithState");
+        if(matches != null){
+            ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
+            for(int i=0;i<matches.getLength();i++){
+                VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
+                System.out.println("VM Platform: " + vm.getPlatform());
+                if(vm != null)vms.add(vm);
             }
-            return null;
+            return vms;
         }
-        finally {
-            APITrace.end();
-        }
+        return null;
     }
 
+    @Deprecated
     private Iterable<VirtualMachine> listDeployedServers() throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "VM.listDeployedServers");
-        try {
-            ArrayList<VirtualMachine> list = new ArrayList<VirtualMachine>();
+        ArrayList<VirtualMachine> list = new ArrayList<VirtualMachine>();
 
-            /** Get deployed Server */
-            HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
-            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-            parameters.put(0, param);
-            param = new Param("deployed", null);
-            parameters.put(1, param);
+        /** Get deployed Server */
+        HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+        parameters.put(0, param);
+        param = new Param("deployed", null);
+        parameters.put(1, param);
 
-            OpSourceMethod method = new OpSourceMethod(provider,
-                    provider.buildUrl(null, true, parameters),
-                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null, true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
 
-            Document doc = method.invoke();
+        Document doc = method.invoke();
 
-            NodeList matches = doc.getElementsByTagName("DeployedServer");
+        NodeList matches = doc.getElementsByTagName("DeployedServer");
 
-            if(matches != null){
-                for( int i=0; i<matches.getLength(); i++ ) {
-                    Node node = matches.item(i);
-                    VirtualMachine vm = this.toVirtualMachine(node, false, "");
-                    if( vm != null ) {
-                        list.add(vm);
-                    }
+        if(matches != null){
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
+                VirtualMachine vm = this.toVirtualMachine(node, false, "");
+                if( vm != null ) {
+                    list.add(vm);
                 }
             }
-            return list;
         }
-        finally {
-            APITrace.end();
-        }
+        return list;
     }
 
-
+    @Deprecated
     private Iterable<VirtualMachine> listPendingServers() throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "VM.listPendingServers");
-        try {
-            ArrayList<VirtualMachine> list = new ArrayList<VirtualMachine>();
+        ArrayList<VirtualMachine> list = new ArrayList<VirtualMachine>();
 
-            /** Get pending deploy server */
-            HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
-            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-            parameters.put(0, param);
-            param = new Param("pendingDeploy", null);
-            parameters.put(1, param);
+        /** Get pending deploy server */
+        HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+        parameters.put(0, param);
+        param = new Param("pendingDeploy", null);
+        parameters.put(1, param);
 
-            OpSourceMethod method = new OpSourceMethod(provider,
-                    provider.buildUrl(null, true, parameters),
-                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl(null, true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
 
-            Document doc = method.invoke();
+        Document doc = method.invoke();
 
-            NodeList matches = doc.getElementsByTagName(Pending_Deployed_Server_Tag);
-            if(matches != null){
-                for( int i=0; i<matches.getLength(); i++ ) {
-                    Node node = matches.item(i);
-                    VirtualMachine vm = this.toVirtualMachine(node, true, "");
-                    if( vm != null ) {
-                        list.add(vm);
-                    }
+        NodeList matches = doc.getElementsByTagName(Pending_Deployed_Server_Tag);
+        if(matches != null){
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
+                VirtualMachine vm = this.toVirtualMachine(node, true, "");
+                if( vm != null ) {
+                    list.add(vm);
                 }
             }
-            return list;
         }
-        finally {
-            APITrace.end();
-        }
+        return list;
     }
 
-    /** Modify VM with the cpu and memory */
-    private boolean modify(String serverId, int cpuCount, int memoryInMb ) throws InternalException, CloudException {
+	/** Modify VM with the cpu and memory */
+	private boolean modify(String serverId, int cpuCount, int memoryInMb ) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.modify");
-        try {
+        try{
             HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
             Param param = new Param(OpSource.SERVER_BASE_PATH, null);
             parameters.put(0, param);
@@ -1073,7 +1056,7 @@ public class VirtualMachines extends AbstractVMSupport {
         finally {
             APITrace.end();
         }
-    }
+	}
 
     @Override
     public void stop(@Nonnull String serverId, boolean hardOff) throws InternalException, CloudException {
@@ -1346,7 +1329,6 @@ public class VirtualMachines extends AbstractVMSupport {
         if(node == null) {
             return null;
         }
-
         HashMap<String,String> properties = new HashMap<String,String>();
         VirtualMachine server = new VirtualMachine();
         NodeList attributes = node.getChildNodes();
@@ -1366,9 +1348,7 @@ public class VirtualMachines extends AbstractVMSupport {
         ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
         for(int i=0; i<attributes.getLength(); i++){
             Node attribute = attributes.item(i);
-            if( attribute.getNodeType() == Node.TEXT_NODE ) {
-                continue;
-            }
+            if(attribute.getNodeType() == Node.TEXT_NODE) continue;
             String name = attribute.getNodeName();
             String value = "";
             try{
@@ -1377,9 +1357,7 @@ public class VirtualMachines extends AbstractVMSupport {
             catch(Exception ex){}
 
             String nameSpaceString = "";
-            if( !nameSpace.equals("") ) {
-                nameSpaceString = nameSpace + ":";
-            }
+            if(!nameSpace.equals("")) nameSpaceString = nameSpace + ":";
 
             if(name.equalsIgnoreCase(nameSpaceString + "name")){
                 server.setName(value);
@@ -1388,9 +1366,9 @@ public class VirtualMachines extends AbstractVMSupport {
                 server.setDescription(value);
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "networkId")){
-                if(!provider.isVlanInRegion(value)){
-                    return null;
-                }
+                //if(!provider.isVlanInRegion(value)){ //This code always returns null?
+                //    return null;
+                //}
                 server.setProviderVlanId(value);
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "operatingSystem")){
@@ -1405,7 +1383,10 @@ public class VirtualMachines extends AbstractVMSupport {
                         server.setArchitecture(Architecture.I32);
                     }
                     if(osDisplayName != null) {
-                        server.setPlatform(Platform.guess(osDisplayName));
+                        if(osDisplayName.contains("WIN")){
+                            server.setPlatform(Platform.WINDOWS);
+                        }
+                        else server.setPlatform(Platform.guess(osDisplayName));
                     }
                 }
                 else{
@@ -1464,28 +1445,16 @@ public class VirtualMachines extends AbstractVMSupport {
                 }
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "isDeployed")){
-                if( value.equalsIgnoreCase("true") ) {
-                    isDeployed = true;
-                }
-                else {
-                    isDeployed = false;
-                }
+                if(value.equalsIgnoreCase("true"))isDeployed = true;
+                else isDeployed = false;
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "isStarted")){
-                if( value.equalsIgnoreCase("true") ) {
-                    server.setCurrentState(VmState.RUNNING);
-                }
-                else {
-                    server.setCurrentState(VmState.STOPPED);
-                }
+                if(value.equalsIgnoreCase("true"))server.setCurrentState(VmState.RUNNING);
+                else server.setCurrentState(VmState.STOPPED);
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "state")){
-                if( isDeployed && value.equals("PENDING_CHANGE") ) {
-                    pendingChange = true;
-                }
-                else if( !isDeployed && value.equals("PENDING_ADD") ) {
-                    server.setCurrentState(VmState.PENDING);
-                }
+                if(isDeployed && value.equals("PENDING_CHANGE"))pendingChange = true;
+                else if(!isDeployed && value.equals("PENDING_ADD"))server.setCurrentState(VmState.PENDING);
             }
             else if(pendingChange && name.equalsIgnoreCase(nameSpaceString + "status")){
                 NodeList status = attribute.getChildNodes();
@@ -1498,19 +1467,13 @@ public class VirtualMachines extends AbstractVMSupport {
                                 server.setCurrentState(VmState.RUNNING);
                                 server.setLastBootTimestamp(System.currentTimeMillis());
                             }
-                            else if( action.equalsIgnoreCase("POWER_OFF_SERVER") ) {
-                                server.setCurrentState(VmState.STOPPING);
-                            }
-                            else if( action.equalsIgnoreCase("SHUTDOWN_SERVER") ) {
-                                server.setCurrentState(VmState.STOPPING);
-                            }
-                            else if( action.equalsIgnoreCase("RESET_SERVER") ) {
+                            else if(action.equalsIgnoreCase("POWER_OFF_SERVER"))server.setCurrentState(VmState.STOPPING);
+                            else if(action.equalsIgnoreCase("SHUTDOWN_SERVER"))server.setCurrentState(VmState.STOPPING);
+                            else if(action.equalsIgnoreCase("RESET_SERVER")){
                                 server.setCurrentState(VmState.REBOOTING);
                                 server.setLastBootTimestamp(System.currentTimeMillis());
                             }
-                            else {
-                                server.setCurrentState(VmState.PENDING);
-                            }
+                            else server.setCurrentState(VmState.PENDING);
                         }
                     }
                 }
@@ -1545,10 +1508,12 @@ public class VirtualMachines extends AbstractVMSupport {
             product.setDescription(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");*/
 
             server.setProductId(cpuCount + ":" + memoryInMb + ":" + diskString);
+            System.out.println("Server product String: " + server.getProductId());
         }
         return server;
     }
 
+    @Deprecated
     private VirtualMachine toVirtualMachine(Node node, Boolean isPending, String nameSpace) throws CloudException, InternalException {
         if( node == null ) {
             return null;
@@ -1577,9 +1542,7 @@ public class VirtualMachines extends AbstractVMSupport {
 
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
-            if( attribute.getNodeType() == Node.TEXT_NODE ) {
-                continue;
-            }
+            if(attribute.getNodeType() == Node.TEXT_NODE) continue;
             String name = attribute.getNodeName();
             String value;
 
@@ -1593,9 +1556,7 @@ public class VirtualMachines extends AbstractVMSupport {
 
 
             String nameSpaceString = "";
-            if( !nameSpace.equals("") ) {
-                nameSpaceString = nameSpace + ":";
-            }
+            if(!nameSpace.equals("")) nameSpaceString = nameSpace + ":";
             if( name.equals(nameSpaceString + "id") || name.equals("id") ) {
                 server.setProviderVirtualMachineId(value);
             }
@@ -1695,18 +1656,14 @@ public class VirtualMachines extends AbstractVMSupport {
                 NodeList machineAttributes  = attribute.getChildNodes();
                 for(int j=0;j<machineAttributes.getLength();j++ ){
                     Node machine = machineAttributes.item(j);
-                    if( machine.getNodeType() == Node.TEXT_NODE ) {
-                        continue;
-                    }
+                    if(machine.getNodeType() == Node.TEXT_NODE) continue;
 
                     if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "operatingSystem") ){
                         NodeList osAttributes  = machine.getChildNodes();
                         for(int k=0;k<osAttributes.getLength();k++ ){
                             Node os = osAttributes.item(k);
 
-                            if( os.getNodeType() == Node.TEXT_NODE ) {
-                                continue;
-                            }
+                            if(os.getNodeType() == Node.TEXT_NODE) continue;
                             String osName = os.getNodeName();
                             String osValue = null ;
 
@@ -1759,9 +1716,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 NodeList statusAttributes  = attribute.getChildNodes();
                 for(int j=0;j<statusAttributes.getLength();j++ ){
                     Node status = statusAttributes.item(j);
-                    if( status.getNodeType() == Node.TEXT_NODE ) {
-                        continue;
-                    }
+                    if(status.getNodeType() == Node.TEXT_NODE) continue;
                     if( status.getNodeName().equalsIgnoreCase(nameSpaceString + "step") ){
                         //TODO
                         /** If it is this status means it is pending */
@@ -1885,9 +1840,7 @@ public class VirtualMachines extends AbstractVMSupport {
             Node item = data.item(i);
 
 
-            if( item.getNodeType() == Node.TEXT_NODE ) {
-                continue;
-            }
+            if(item.getNodeType() == Node.TEXT_NODE) continue;
 
             if( item.getNodeName().equals(nameSpace + "location") ) {
                 r.setProviderRegionId(item.getFirstChild().getNodeValue());
