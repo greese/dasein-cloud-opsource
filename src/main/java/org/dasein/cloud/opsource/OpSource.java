@@ -492,6 +492,7 @@ public class OpSource extends AbstractCloud {
         endpointList.add("euapi.cloud.is.co.za");
         endpointList.add("auapi.cloud.is.co.za");
         endpointList.add("meapi.cloud.is.co.za");
+        map.put(providerName, endpointList);
 
         providerName = OpSource_Concentric_Name;
         endpointList = new ArrayList<String>();
