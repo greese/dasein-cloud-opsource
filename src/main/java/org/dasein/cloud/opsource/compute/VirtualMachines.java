@@ -24,7 +24,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -189,8 +188,6 @@ public class VirtualMachines implements VirtualMachineSupport {
                     int newMemory = -1;
                     try{
                         newMemory = Integer.parseInt(parts[1]);
-                        //TODO: This is temporary - RAM should always be in MB
-                        if(newMemory < 100) newMemory = newMemory * 1024;
                     }
                     catch(NumberFormatException ex){}
                     System.out.println("Current Ram: " + currentRam);
@@ -321,7 +318,7 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Nullable
     @Override
     public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
-        return VMScalingCapabilities.getInstance(false, true, Requirement.OPTIONAL, Requirement.OPTIONAL);//TODO: Check that this is correct for 2013.02
+        return VMScalingCapabilities.getInstance(false, true, Requirement.OPTIONAL, Requirement.OPTIONAL);
     }
 
     @Override
@@ -341,7 +338,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public int getCostFactor(@Nonnull VmState vmState) throws InternalException, CloudException {
-        return 0;  //TODO: Implement for 2013.01
+        return (vmState.equals(VmState.STOPPED) ? 0 : 100);
     }
 
     @Override
@@ -353,6 +350,10 @@ public class VirtualMachines implements VirtualMachineSupport {
 	public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
 		for( Architecture architecture : Architecture.values() ) {
 			for( VirtualMachineProduct product : listProducts(architecture) ) {
+
+                System.out.println("CurrentId: " + product.getProviderProductId());
+                System.out.println("SearchProductId: " + productId);
+
 				if( product.getProviderProductId().equals(productId) ) {
 					return product;
 				}
@@ -441,7 +442,7 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Nonnull
     @Override
     public Requirement identifyImageRequirement(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        return Requirement.OPTIONAL;
     }
 
     @Override
@@ -540,16 +541,6 @@ public class VirtualMachines implements VirtualMachineSupport {
             if (productIds.length == 2) {
             	cpuCount = productIds[0];
             	ramSize = productIds[1];
-                try{
-                    //TODO: This is temporary - All ram should be in MB
-                    if(Integer.parseInt(ramSize) < 100){
-                        ramSize = (Integer.parseInt(ramSize) * 1024) + "";
-                    }
-                }
-                catch(NumberFormatException ex){
-                    throw new InternalException("Invalid value specified for RAM in product id string");
-                }
-            	//volumeSizes = productIds[2];
             }
             else {
                 throw new InternalError("Invalid product id string");
@@ -575,6 +566,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
 
             String password = getRandomPassword();
+            if(withLaunchOptions.getBootstrapPassword() != null && !withLaunchOptions.getBootstrapPassword().equals(""))password = withLaunchOptions.getBootstrapPassword();
             //if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
             if(currentCPU == targetCPU && currentMemory == targetMemory){
                 if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ) {
@@ -609,6 +601,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
 
             final VirtualMachine server = getVirtualMachineByName(name);
+            server.setRootPassword(password);
 
             /** update the hardware (CPU, memory configuration)*/
             if(server == null){
@@ -987,13 +980,21 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public Iterable<Architecture> listSupportedArchitectures() throws InternalException, CloudException {
-        return Collections.singletonList(Architecture.I64);
+        ArrayList<Architecture> list = new ArrayList<Architecture>();
+        list.add(Architecture.I64);
+        list.add(Architecture.I32);
+        return list;
     }
 
     @Nonnull
     @Override
     public Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
-        return null;  //TODO: Implement for 2013.01
+        ArrayList<ResourceStatus> list = new ArrayList<ResourceStatus>();
+        for(VirtualMachine vm : listVirtualMachines()){
+            ResourceStatus status = new ResourceStatus(vm.getProviderVirtualMachineId(), vm.getCurrentState());
+            list.add(status);
+        }
+        return list;
     }
 
     @Override
@@ -1012,6 +1013,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
             for(int i=0;i<matches.getLength();i++){
                 VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
+                System.out.println("VM Platform: " + vm.getPlatform());
                 if(vm != null)vms.add(vm);
             }
             return vms;
@@ -1024,6 +1026,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         throw new OperationNotSupportedException("Pause/unpause is not supported");
     }
 
+    @Deprecated
     private Iterable<VirtualMachine> listDeployedServers() throws InternalException, CloudException {
 		ArrayList<VirtualMachine> list = new ArrayList<VirtualMachine>();
 
@@ -1054,7 +1057,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 		return list;
 	}
 
-
+    @Deprecated
 	private Iterable<VirtualMachine> listPendingServers() throws InternalException, CloudException {
 		ArrayList<VirtualMachine> list = new ArrayList<VirtualMachine>();
 
@@ -1392,7 +1395,6 @@ public class VirtualMachines implements VirtualMachineSupport {
         if(node == null) {
             return null;
         }
-
         HashMap<String,String> properties = new HashMap<String,String>();
         VirtualMachine server = new VirtualMachine();
         NodeList attributes = node.getChildNodes();
@@ -1430,9 +1432,9 @@ public class VirtualMachines implements VirtualMachineSupport {
                 server.setDescription(value);
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "networkId")){
-                if(!provider.isVlanInRegion(value)){
-                    return null;
-                }
+                //if(!provider.isVlanInRegion(value)){ //This code always returns null?
+                //    return null;
+                //}
                 server.setProviderVlanId(value);
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "operatingSystem")){
@@ -1447,7 +1449,10 @@ public class VirtualMachines implements VirtualMachineSupport {
                         server.setArchitecture(Architecture.I32);
                     }
                     if(osDisplayName != null) {
-                        server.setPlatform(Platform.guess(osDisplayName));
+                        if(osDisplayName.contains("WIN")){
+                            server.setPlatform(Platform.WINDOWS);
+                        }
+                        else server.setPlatform(Platform.guess(osDisplayName));
                     }
                 }
                 else{
@@ -1574,6 +1579,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         return server;
     }
 
+    @Deprecated
 	private VirtualMachine toVirtualMachine(Node node, Boolean isPending, String nameSpace) throws CloudException, InternalException {
 		if( node == null ) {
 			return null;
