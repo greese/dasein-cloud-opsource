@@ -1011,7 +1011,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
             for(int i=0;i<matches.getLength();i++){
                 VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
-                if(vm != null)vms.add(vm);
+                if(vm != null && provider.getContext().getRegionId().equals(vm.getProviderRegionId()))vms.add(vm);
             }
             return vms;
         }

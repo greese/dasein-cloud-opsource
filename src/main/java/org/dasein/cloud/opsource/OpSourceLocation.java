@@ -173,8 +173,6 @@ public class OpSourceLocation implements DataCenterServices {
                     }
                 }
                 catch(Exception ex){
-                    System.out.println("OpSourceLocation error");
-                    ex.printStackTrace();
                     /*
                     If this fails it is likely a 401 authentication error against the endpoint.
                     Rather than getting a nice XML API error response however, OpSource returns the default apache htaccess 401 error
