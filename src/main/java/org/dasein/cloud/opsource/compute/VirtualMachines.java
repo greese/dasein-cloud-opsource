@@ -568,7 +568,9 @@ public class VirtualMachines implements VirtualMachineSupport {
             //if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
             if(currentCPU == targetCPU && currentMemory == targetMemory){
                 if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ) {
-                    return getVirtualMachineByName(name);
+                    VirtualMachine server = getVirtualMachineByName(name);
+                    server.setRootPassword(password);
+                    return server;
                 }
                 else {
                     throw new CloudException("Fail to launch the server");
@@ -582,7 +584,9 @@ public class VirtualMachines implements VirtualMachineSupport {
 
                 if(targetImage != null) {
                     if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ){
-                        return getVirtualMachineByName(name);
+                        VirtualMachine server = getVirtualMachineByName(name);
+                        server.setRootPassword(password);
+                        return server;
                     }
                     else {
                         throw new CloudException("Fail to launch the server");
