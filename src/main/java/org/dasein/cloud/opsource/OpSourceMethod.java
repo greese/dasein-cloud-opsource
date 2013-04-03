@@ -620,16 +620,19 @@ public class OpSourceMethod {
 	            //return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(input);
 
                 Document parseForError = null;
-                parseForError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-                return parseForError;
+                if(!xml.contains("<HR")){
+                    parseForError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+                    return parseForError;
+                }
+                throw new InternalException("Unparsable error: " + xml);
 	    	}
-	        catch( IOException e ) {
+	        catch(IOException e) {
 	        	throw new CloudException(e);
 	        }
-            catch( ParserConfigurationException e ) {
+            catch(ParserConfigurationException e) {
                 throw new CloudException(e);
             }
-            catch( SAXException e ) {
+            catch(SAXException e) {
                 throw new CloudException("Received error code from server [" + code + "]: " + xml);
             }
         }
