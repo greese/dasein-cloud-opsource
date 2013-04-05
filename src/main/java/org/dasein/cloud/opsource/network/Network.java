@@ -687,7 +687,7 @@ public class Network implements VLANSupport {
        return createSubnet(inProviderVlanId);
     }
     public Subnet createSubnet(String inProviderVlanId) throws CloudException, InternalException {
-    	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+    	/*HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
         
        	parameters.put(0, param);
@@ -707,7 +707,8 @@ public class Network implements VLANSupport {
         //Result would be something like: Public IP block with base IP 207.20.37.208 is reserved
        	String result = method.requestResult("Creating subnet", method.invoke(), "result", "resultDetail");
        	
-       	return getSubnetResponseInfo(result);       	
+       	return getSubnetResponseInfo(result);*/
+        throw new OperationNotSupportedException("Subnets are not supported");
     }
 
     @Override
