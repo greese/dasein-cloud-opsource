@@ -348,10 +348,6 @@ public class VirtualMachines implements VirtualMachineSupport {
 	public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
 		for( Architecture architecture : Architecture.values() ) {
 			for( VirtualMachineProduct product : listProducts(architecture) ) {
-
-                System.out.println("CurrentId: " + product.getProviderProductId());
-                System.out.println("SearchProductId: " + productId);
-
 				if( product.getProviderProductId().equals(productId) ) {
 					return product;
 				}
@@ -603,12 +599,13 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
 
             final VirtualMachine server = getVirtualMachineByName(name);
-            server.setRootPassword(password);
 
             /** update the hardware (CPU, memory configuration)*/
             if(server == null){
                 throw new CloudException("Server failed to deploy without explaination");
             }
+            server.setRootPassword(password);
+
             Thread t = new Thread() {
                 public void run() {
                     provider.hold();
@@ -1000,27 +997,43 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
-	public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
+    public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
+        ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
+
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.SERVER_WITH_STATE, null);
         parameters.put(0, param);
 
+        int pageSize = 250;
+        int currentPage = 1;
+        return doListVirtualMachines(vms, parameters, pageSize, currentPage);
+    }
+
+    private ArrayList<VirtualMachine> doListVirtualMachines(ArrayList<VirtualMachine> vms, HashMap<Integer, Param> parameters, int pageSize, int currentPage)throws InternalException, CloudException{
+        boolean completeList = false;
+
         OpSourceMethod method = new OpSourceMethod(provider,
-                provider.buildUrl(null, true, parameters),
-                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+                provider.buildUrl("pageSize=" + pageSize + "&pageNumber=" + currentPage + "&location=" + provider.getContext().getRegionId(), true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
 
         Document doc = method.invoke();
+        NodeList headMatches = doc.getElementsByTagName("ServersWithState");
+        if(headMatches != null){
+            int currentPageSize = Integer.parseInt(headMatches.item(0).getAttributes().getNamedItem("pageCount").getNodeValue());
+            if(currentPageSize < pageSize)completeList = true;
+        }
+
         NodeList  matches = doc.getElementsByTagName("serverWithState");
         if(matches != null){
-            ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
             for(int i=0;i<matches.getLength();i++){
                 VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
-                if(vm != null && provider.getContext().getRegionId().equals(vm.getProviderRegionId()))vms.add(vm);
+                if(vm != null)vms.add(vm);
             }
-            return vms;
         }
-        return null;
-	}
+        currentPage++;
+        if(!completeList) doListVirtualMachines(vms, parameters, pageSize, currentPage);
+        return vms;
+    }
 
     @Override
     public void pause(@Nonnull String vmId) throws InternalException, CloudException {
@@ -1481,7 +1494,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                         }
                         else{
                             server.setTag("additionalLocalStorage" + scsiId, diskSize+"");
-                            attachedDisks.add(scsiId, diskSize);
+                            attachedDisks.add(diskSize);
                         }
                     }
                 }
