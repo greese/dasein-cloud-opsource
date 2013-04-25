@@ -121,9 +121,6 @@ public class CallCache {
     }
 
     public void resetCacheTimer(String resource){
-
-        System.out.println("Reset cache timer for: " + resource);
-
         if(resource.equals(NETWORK_WITH_LOCATION)){
             networkWithLocationCacheTime = 0L;
         }

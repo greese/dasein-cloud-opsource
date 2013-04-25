@@ -1425,7 +1425,9 @@ public class VirtualMachines implements VirtualMachineSupport {
 
         boolean isDeployed = false;
         boolean pendingChange = false;
-        ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
+        //ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
+        HashMap<String, String> attachedDisks = new HashMap<String, String>();
+
         for(int i=0; i<attributes.getLength(); i++){
             Node attribute = attributes.item(i);
             if(attribute.getNodeType() == Node.TEXT_NODE) continue;
@@ -1487,14 +1489,16 @@ public class VirtualMachines implements VirtualMachineSupport {
 
                     Node sizeNode = attribute.getAttributes().getNamedItem("sizeGb").getFirstChild();
                     if(sizeNode != null){
-                        int diskSize = Integer.parseInt(sizeNode.getNodeValue().trim());
+                        String diskSize = sizeNode.getNodeValue().trim();
                         if(scsiId == 0){
-                            server.setTag("osStorage", diskSize+"");
-                            attachedDisks.add(0, diskSize);
+                            server.setTag("osStorage", diskSize);
+                            attachedDisks.put(0+"", diskSize);
+                            //attachedDisks.add(0, diskSize);
                         }
                         else{
-                            server.setTag("additionalLocalStorage" + scsiId, diskSize+"");
-                            attachedDisks.add(diskSize);
+                            server.setTag("additionalLocalStorage" + scsiId, diskSize);
+                            attachedDisks.put(scsiId+"", diskSize);
+                            //attachedDisks.add(diskSize);
                         }
                     }
                 }
@@ -1574,7 +1578,8 @@ public class VirtualMachines implements VirtualMachineSupport {
             int memoryInMb = Integer.valueOf((String) server.getTag("memory"));
             String diskString = "[";
             for(int i=0;i<attachedDisks.size();i++){
-                int diskSize = attachedDisks.get(i);
+                String diskSize = attachedDisks.get(i+"");
+                //int diskSize = attachedDisks.get(i);
                 diskString += diskSize + ",";
             }
             diskString = diskString.substring(0, diskString.length()-1) + "]";
