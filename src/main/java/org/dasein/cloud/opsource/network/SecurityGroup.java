@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
@@ -117,8 +119,14 @@ public class SecurityGroup implements FirewallSupport {
         Document doc = provider.createDoc();
         Element aclRule = doc.createElementNS("http://oec.api.opsource.net/schemas/network", "AclRule");
         Element nameElmt = doc.createElement("name");
-        if(direction.equals(Direction.INGRESS)) nameElmt.setTextContent(sourceRuleTarget.getCidr());
-        else nameElmt.setTextContent(destinationRuleTarget.getCidr());
+        if(direction.equals(Direction.INGRESS)) {
+            if(sourceRuleTarget.getCidr()!= null) nameElmt.setTextContent(sourceRuleTarget.getCidr());
+            else nameElmt.setTextContent("Global Rule");
+        }
+        else {
+            if(destinationRuleTarget.getCidr() != null)nameElmt.setTextContent(destinationRuleTarget.getCidr());
+            else nameElmt.setTextContent("Global Rule");
+        }
 
         Element positionElmt = doc.createElement("position");
         String positionId = precedence + "";
@@ -827,26 +835,56 @@ public class SecurityGroup implements FirewallSupport {
             	
             }
             else if( name.equalsIgnoreCase(sNS + "sourceIpRange") ) {
-        		String networkMask = null;
+                String ipAddress = "";
+        		String netMask = "";
             	NodeList ipAddresses = attribute.getChildNodes();
             	for(int j = 0 ;j < ipAddresses.getLength(); j ++){
             		Node ip = ipAddresses.item(j);
             		if(ip.getNodeType() == Node.TEXT_NODE) continue;
    
             		if(ip.getNodeName().equals(sNS + "ipAddress") && ip.getFirstChild().getNodeValue() != null){
-                        source = RuleTarget.getCIDR(ip.getFirstChild().getNodeValue());
-            		}
+                        //source = RuleTarget.getCIDR(ip.getFirstChild().getNodeValue());
+                        ipAddress = ip.getFirstChild().getNodeValue().trim();
+                    }
+                    else if(ip.getNodeName().equalsIgnoreCase(sNS + "netmask") && ip.getFirstChild().getNodeValue() != null){
+                        netMask = ip.getFirstChild().getNodeValue().trim();
+                    }
+                    if(netMask.equals(""))source = RuleTarget.getCIDR(ipAddress);
+                    else{
+                        try{
+                            source = RuleTarget.getCIDR(toCidrNotation(ipAddress, netMask));
+                        }
+                        catch(InternalException ex){
+                            logger.debug(ex.getMessage());
+                            return null;
+                        }
+                    }
             	}
             }
             else if( name.equalsIgnoreCase(sNS + "destinationIpRange") ) {
-                String networkMask = null;
+                String ipAddress = "";
+                String netMask = "";
                 NodeList ipAddresses = attribute.getChildNodes();
                 for(int j = 0 ;j < ipAddresses.getLength(); j ++){
                     Node ip = ipAddresses.item(j);
                     if(ip.getNodeType() == Node.TEXT_NODE) continue;
 
                     if(ip.getNodeName().equals(sNS + "ipAddress") && ip.getFirstChild().getNodeValue() != null){
-                        destination = RuleTarget.getCIDR(ip.getFirstChild().getNodeValue());
+                        //destination = RuleTarget.getCIDR(ip.getFirstChild().getNodeValue());
+                        ipAddress = ip.getFirstChild().getNodeValue().trim();
+                    }
+                    else if(ip.getNodeName().equalsIgnoreCase(sNS + "netmask") && ip.getFirstChild().getNodeValue() != null){
+                        netMask = ip.getFirstChild().getNodeValue().trim();
+                    }
+                }
+                if(netMask.equals(""))destination = RuleTarget.getCIDR(ipAddress);
+                else{
+                    try{
+                        destination = RuleTarget.getCIDR(toCidrNotation(ipAddress, netMask));
+                    }
+                    catch(InternalException ex){
+                        logger.debug(ex.getMessage());
+                        return null;
                     }
                 }
             }
@@ -889,10 +927,49 @@ public class SecurityGroup implements FirewallSupport {
         if(source == null)source = RuleTarget.getGlobal(firewallId);
         if(destination == null)destination = RuleTarget.getGlobal(firewallId);
 
-        System.out.println("Provider Rule ID: " + providerRuleId + ":" + positionId);
-
         FirewallRule rule = FirewallRule.getInstance(providerRuleId + ":" + positionId, firewallId, source, direction, protocol, permission, destination, startPort, endPort);
         rule = rule.withPrecedence(positionId);
         return rule;
+    }
+
+    private static final String IP_ADDRESS = "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})";
+    private static final Pattern addressPattern = Pattern.compile(IP_ADDRESS);
+
+    private int toInteger(String address) throws InternalException{
+        Matcher matcher = addressPattern.matcher(address);
+        if (matcher.matches()) {
+            return matchAddress(matcher);
+        }
+        else
+            throw new IllegalArgumentException("Could not parse [" + address + "]");
+    }
+
+    private int matchAddress(Matcher matcher) throws InternalException {
+        int addr = 0;
+        for (int i = 1; i <= 4; ++i) {
+            int n = (rangeCheck(Integer.parseInt(matcher.group(i)), -1, 255));
+            addr |= ((n & 0xff) << 8*(4-i));
+        }
+        return addr;
+    }
+
+    private int rangeCheck(int value, int begin, int end) throws InternalException{
+        if (value > begin && value <= end) // (begin,end]
+            return value;
+
+        throw new InternalException("Value:" + value + " not in range ("+begin+","+end+")");
+    }
+
+    int pop(int x) {
+        x = x - ((x >>> 1) & 0x55555555);
+        x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
+        x = (x + (x >>> 4)) & 0x0F0F0F0F;
+        x = x + (x >>> 8);
+        x = x + (x >>> 16);
+        return x & 0x0000003F;
+    }
+
+    private String toCidrNotation(String addr, String mask) throws InternalException{
+        return addr + "/" + pop(toInteger(mask));
     }
 }
