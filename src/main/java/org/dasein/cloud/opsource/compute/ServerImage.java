@@ -18,8 +18,6 @@
 
 package org.dasein.cloud.opsource.compute;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
@@ -264,8 +262,9 @@ public class ServerImage implements MachineImageSupport {
     	   	
         param = new Param(vmId, null);
     	parameters.put(1, param);
-    	
-        param = new Param(CREATE_IMAGE, name);
+
+        // Can not use space in the url
+        param = new Param(CREATE_IMAGE, name.replace(" ", "_"));
     	parameters.put(2, param);
     	
     	// Can not use space in the url
@@ -275,8 +274,9 @@ public class ServerImage implements MachineImageSupport {
     	OpSourceMethod method = new OpSourceMethod(provider,    			
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+        Document doc = method.invoke();
     	
-    	if(method.parseRequestResult("Imaging", method.invoke(), "result", "resultDetail")){
+    	if(method.parseRequestResult("Imaging", doc, "result", "resultDetail")){
     	   	//First check the pending images, because it is mostly being checked by customers
         	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
         	for(MachineImage image : list){
@@ -285,7 +285,7 @@ public class ServerImage implements MachineImageSupport {
         		}    		
         	}
         	//Check deployed Image
-        	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
+        	list = (ArrayList<MachineImage>) listCustomerMachineDeployedImages();
         	for(MachineImage image : list){
         		if(image.getName().equals(name)){
         			return image;
@@ -356,8 +356,7 @@ public class ServerImage implements MachineImageSupport {
     @Nonnull
     @Override
     public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String ownedBy) throws CloudException, InternalException {
-        //listCustomerMachineImages
-        return null;  //TODO: Implement for 2013.01
+        return listImages(imageClass);
     }
 
     @Override
@@ -404,9 +403,7 @@ public class ServerImage implements MachineImageSupport {
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachineDeployedImages()");
         }
-        try{        	
-   
-	    	
+        try{
 	    	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
 	    	
 	    	/** Get deployed Image */
@@ -425,7 +422,7 @@ public class ServerImage implements MachineImageSupport {
 	        if(matches != null){
 	            for( int i=0; i<matches.getLength(); i++ ) {
 	                Node node = matches.item(i);            
-	                MachineImage image = this.toImage(node, true, false, "");
+	                MachineImage image = toImage(node, true, false, "");
 	                
 	                if( image != null ) {
 	                	list.add(image);
@@ -886,8 +883,8 @@ public class ServerImage implements MachineImageSupport {
            	 	}            	
             
            }
-           else if( name.equals(nameSpaceString + "location") && value != null) {
-        	   if(! provider.getDefaultRegionId().equals(value)){
+           else if(name.equals(nameSpaceString + "location") && value != null) {
+        	   if(!provider.getContext().getRegionId().equalsIgnoreCase(value)){
         		  return null;  
         	   }
         	   image.setProviderRegionId(value);
