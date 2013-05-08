@@ -162,6 +162,17 @@ public class VirtualMachines implements VirtualMachineSupport {
             String currentCpuCount = vm.getProductId().substring(0, vm.getProductId().indexOf(":"));
             String currentRam = vm.getProductId().substring(currentCpuCount.length() + 1, vm.getProductId().lastIndexOf(":"));
 
+            //Ensure only one disk is being added - OpSource only supports a single disksize operation
+            if(parts.length >= 3){
+                String diskString = parts[2];
+                String currentDiskString = vm.getProductId().substring(vm.getProductId().lastIndexOf(":") + 1);
+                if(!diskString.equals(currentDiskString)){
+                    int currentDiskCount = currentDiskString.split(",").length;
+                    int newDiskCount = diskString.split(",").length;
+                    if(newDiskCount > currentDiskCount + 1)throw new CloudException("Only one disk can be added in a single scaling operation. Check your product string format.");
+                }
+            }
+
             String requestBody = "";
             boolean isCpuChanged = false;
             if(parts.length >= 1){
