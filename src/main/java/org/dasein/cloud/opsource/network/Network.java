@@ -638,40 +638,29 @@ public class Network extends AbstractVLANSupport {
     public @Nonnull Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
        return createSubnet(options.getProviderVlanId());
     }
-
-    public @Nonnull Subnet createSubnet(@Nonnull String inProviderVlanId) throws CloudException, InternalException {
-        APITrace.begin(getProvider(), "VLAN.createSubnet");
-        try {
-            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-
-            parameters.put(0, param);
-
-            param = new Param(inProviderVlanId, null);
-
-            parameters.put(1, param);
-
-            param = new Param("publicip", null);
-
-            parameters.put(2, param);
-
-            OpSourceMethod method = new OpSourceMethod(provider,
-                    provider.buildUrl("reserveNew",true, parameters),
-                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-
-            //Result would be something like: Public IP block with base IP 207.20.37.208 is reserved
-            String result = method.requestResult("Creating subnet", method.invoke(), "result", "resultDetail");
-
-            Subnet subnet = getSubnetResponseInfo(result);
-
-            if( subnet == null ) {
-                throw new CloudException("Unable to identify a valid subnet in the response");
-            }
-            return subnet;
-        }
-        finally {
-            APITrace.end();
-        }
+    public Subnet createSubnet(String inProviderVlanId) throws CloudException, InternalException {
+    	/*HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+        Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+        
+       	parameters.put(0, param);
+       	
+       	param = new Param(inProviderVlanId, null);
+        
+       	parameters.put(1, param);
+       	
+       	param = new Param("publicip", null);
+        
+       	parameters.put(2, param);
+        	
+       	OpSourceMethod method = new OpSourceMethod(provider, 
+       			provider.buildUrl("reserveNew",true, parameters),
+       			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+         	
+        //Result would be something like: Public IP block with base IP 207.20.37.208 is reserved
+       	String result = method.requestResult("Creating subnet", method.invoke(), "result", "resultDetail");
+       	
+       	return getSubnetResponseInfo(result);*/
+        throw new OperationNotSupportedException("Subnets are not supported");
     }
 
     @Override

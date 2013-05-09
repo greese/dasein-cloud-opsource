@@ -332,8 +332,7 @@ public class ServerImage extends AbstractImageSupport {
     @Nonnull
     @Override
     public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String ownedBy) throws CloudException, InternalException {
-        //listCustomerMachineImages
-        return null;  //TODO: Implement for 2013.01
+        return listImages(imageClass);
     }
 
 
@@ -361,9 +360,7 @@ public class ServerImage extends AbstractImageSupport {
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachineDeployedImages()");
         }
-        try{        	
-   
-	    	
+        try{
 	    	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
 	    	
 	    	/** Get deployed Image */
@@ -382,7 +379,7 @@ public class ServerImage extends AbstractImageSupport {
 	        if(matches != null){
 	            for( int i=0; i<matches.getLength(); i++ ) {
 	                Node node = matches.item(i);            
-	                MachineImage image = this.toImage(node, true, false, "");
+	                MachineImage image = toImage(node, true, false, "");
 	                
 	                if( image != null && (options == null || options.matches(image)) ) {
 	                	list.add(image);
@@ -730,8 +727,8 @@ public class ServerImage extends AbstractImageSupport {
            	 	}            	
             
            }
-           else if( name.equals(nameSpaceString + "location") && value != null) {
-        	   if(! provider.getDefaultRegionId().equals(value)){
+           else if(name.equals(nameSpaceString + "location") && value != null) {
+        	   if(!provider.getContext().getRegionId().equalsIgnoreCase(value)){
         		  return null;  
         	   }
         	   regionId = value;

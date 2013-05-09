@@ -162,6 +162,17 @@ public class VirtualMachines extends AbstractVMSupport {
             String currentCpuCount = vm.getProductId().substring(0, vm.getProductId().indexOf(":"));
             String currentRam = vm.getProductId().substring(currentCpuCount.length() + 1, vm.getProductId().lastIndexOf(":"));
 
+            //Ensure only one disk is being added - OpSource only supports a single disksize operation
+            if(parts.length >= 3){
+                String diskString = parts[2];
+                String currentDiskString = vm.getProductId().substring(vm.getProductId().lastIndexOf(":") + 1);
+                if(!diskString.equals(currentDiskString)){
+                    int currentDiskCount = currentDiskString.split(",").length;
+                    int newDiskCount = diskString.split(",").length;
+                    if(newDiskCount > currentDiskCount + 1)throw new CloudException("Only one disk can be added in a single scaling operation. Check your product string format.");
+                }
+            }
+
             String requestBody = "";
             boolean isCpuChanged = false;
             if(parts.length >= 1){
@@ -532,7 +543,9 @@ public class VirtualMachines extends AbstractVMSupport {
             //if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
             if(currentCPU == targetCPU && currentMemory == targetMemory){
                 if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ) {
-                    return getVirtualMachineByName(name);
+                    VirtualMachine server = getVirtualMachineByName(name);
+                    server.setRootPassword(password);
+                    return server;
                 }
                 else {
                     throw new CloudException("Fail to launch the server");
@@ -546,7 +559,9 @@ public class VirtualMachines extends AbstractVMSupport {
 
                 if(targetImage != null) {
                     if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ){
-                        return getVirtualMachineByName(name);
+                        VirtualMachine server = getVirtualMachineByName(name);
+                        server.setRootPassword(password);
+                        return server;
                     }
                     else {
                         throw new CloudException("Fail to launch the server");
@@ -563,12 +578,13 @@ public class VirtualMachines extends AbstractVMSupport {
             }
 
             final VirtualMachine server = getVirtualMachineByName(name);
-            server.setRootPassword(password);
 
             /** update the hardware (CPU, memory configuration)*/
             if(server == null){
                 throw new CloudException("Server failed to deploy without explaination");
             }
+            server.setRootPassword(password);
+
             Thread t = new Thread() {
                 public void run() {
                     provider.hold();
@@ -950,26 +966,46 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
+        ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
         Param param = new Param(OpSource.SERVER_WITH_STATE, null);
         parameters.put(0, param);
 
+        int pageSize = 250;
+        int currentPage = 1;
+        return doListVirtualMachines(vms, parameters, pageSize, currentPage);
+    }
+
+    private ArrayList<VirtualMachine> doListVirtualMachines(ArrayList<VirtualMachine> vms, HashMap<Integer, Param> parameters, int pageSize, int currentPage)throws InternalException, CloudException{
+        boolean completeList = false;
+
         OpSourceMethod method = new OpSourceMethod(provider,
-                provider.buildUrl(null, true, parameters),
-                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+                provider.buildUrl("pageSize=" + pageSize + "&pageNumber=" + currentPage + "&location=" + provider.getContext().getRegionId(), true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
 
         Document doc = method.invoke();
+        NodeList headMatches = doc.getElementsByTagName("ServersWithState");
+        if(headMatches != null){
+            int currentPageSize = Integer.parseInt(headMatches.item(0).getAttributes().getNamedItem("pageCount").getNodeValue());
+            if(currentPageSize < pageSize)completeList = true;
+        }
+
         NodeList  matches = doc.getElementsByTagName("serverWithState");
         if(matches != null){
-            ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
             for(int i=0;i<matches.getLength();i++){
                 VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
                 System.out.println("VM Platform: " + vm.getPlatform());
                 if(vm != null)vms.add(vm);
             }
-            return vms;
         }
-        return null;
+        currentPage++;
+        if(!completeList) doListVirtualMachines(vms, parameters, pageSize, currentPage);
+        return vms;
+    }
+
+    @Override
+    public void pause(@Nonnull String vmId) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("Pause/unpause is not supported");
     }
 
     @Deprecated
@@ -1345,7 +1381,9 @@ public class VirtualMachines extends AbstractVMSupport {
 
         boolean isDeployed = false;
         boolean pendingChange = false;
-        ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
+        //ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
+        HashMap<String, String> attachedDisks = new HashMap<String, String>();
+
         for(int i=0; i<attributes.getLength(); i++){
             Node attribute = attributes.item(i);
             if(attribute.getNodeType() == Node.TEXT_NODE) continue;
@@ -1407,14 +1445,16 @@ public class VirtualMachines extends AbstractVMSupport {
 
                     Node sizeNode = attribute.getAttributes().getNamedItem("sizeGb").getFirstChild();
                     if(sizeNode != null){
-                        int diskSize = Integer.parseInt(sizeNode.getNodeValue().trim());
+                        String diskSize = sizeNode.getNodeValue().trim();
                         if(scsiId == 0){
-                            server.setTag("osStorage", diskSize+"");
-                            attachedDisks.add(0, diskSize);
+                            server.setTag("osStorage", diskSize);
+                            attachedDisks.put(0+"", diskSize);
+                            //attachedDisks.add(0, diskSize);
                         }
                         else{
-                            server.setTag("additionalLocalStorage" + scsiId, diskSize+"");
-                            attachedDisks.add(scsiId, diskSize);
+                            server.setTag("additionalLocalStorage" + scsiId, diskSize);
+                            attachedDisks.put(scsiId+"", diskSize);
+                            //attachedDisks.add(diskSize);
                         }
                     }
                 }
@@ -1494,7 +1534,8 @@ public class VirtualMachines extends AbstractVMSupport {
             int memoryInMb = Integer.valueOf((String) server.getTag("memory"));
             String diskString = "[";
             for(int i=0;i<attachedDisks.size();i++){
-                int diskSize = attachedDisks.get(i);
+                String diskSize = attachedDisks.get(i+"");
+                //int diskSize = attachedDisks.get(i);
                 diskString += diskSize + ",";
             }
             diskString = diskString.substring(0, diskString.length()-1) + "]";
