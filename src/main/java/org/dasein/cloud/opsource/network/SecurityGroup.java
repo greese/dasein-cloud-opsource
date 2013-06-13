@@ -606,14 +606,25 @@ public class SecurityGroup implements FirewallSupport {
 
     @Override
     public void revoke(@Nonnull String firewallRuleId) throws InternalException, CloudException {
+        String extra = "";
+        if(firewallRuleId.indexOf(":") > 0){
+            extra = firewallRuleId.substring(firewallRuleId.indexOf(":") + 1, firewallRuleId.length());
+            firewallRuleId = firewallRuleId.substring(0, firewallRuleId.indexOf(":"));//This removes the precedence value from the ID
+        }
         String firewallId = "";
-        ArrayList<Firewall> firewalls = (ArrayList<Firewall>)list();
-        for(Firewall firewall : firewalls){
-            ArrayList<FirewallRule> rules = (ArrayList<FirewallRule>)getRules(firewall.getProviderFirewallId());
-            for(FirewallRule rule : rules){
-                if(rule.getProviderRuleId().equals(firewallRuleId)){
-                    firewallId = rule.getFirewallId();
-                    break;
+        if(extra.contains(":")){//This strips off the networkId if it's passed in
+            String[] parts = extra.split(":");
+            firewallId = parts[1];
+        }
+        else{
+            ArrayList<Firewall> firewalls = (ArrayList<Firewall>)list();
+            for(Firewall firewall : firewalls){
+                ArrayList<FirewallRule> rules = (ArrayList<FirewallRule>)getRules(firewall.getProviderFirewallId());
+                for(FirewallRule rule : rules){
+                    if(rule.getProviderRuleId().equals(firewallRuleId)){
+                        firewallId = rule.getFirewallId();
+                        break;
+                    }
                 }
             }
         }
@@ -628,14 +639,14 @@ public class SecurityGroup implements FirewallSupport {
         param = new Param("aclrule", null);
         parameters.put(2, param);
 
-        if(firewallRuleId.indexOf(":") > 0)firewallRuleId = firewallRuleId.substring(0, firewallRuleId.indexOf(":"));
         param = new Param(firewallRuleId, null);
         parameters.put(3, param);
 
         OpSourceMethod method = new OpSourceMethod(provider,
                 provider.buildUrl("delete",true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-        method.parseRequestResult("Revoking firewall rule",method.invoke(), "result", "resultDetail");
+        Document doc = method.invoke();
+        method.parseRequestResult("Revoking firewall rule", doc, "result", "resultDetail");
     }
 
     @Override
@@ -876,15 +887,15 @@ public class SecurityGroup implements FirewallSupport {
                     else if(ip.getNodeName().equalsIgnoreCase(sNS + "netmask") && ip.getFirstChild().getNodeValue() != null){
                         netMask = ip.getFirstChild().getNodeValue().trim();
                     }
-                }
-                if(netMask.equals(""))destination = RuleTarget.getCIDR(ipAddress);
-                else{
-                    try{
-                        destination = RuleTarget.getCIDR(toCidrNotation(ipAddress, netMask));
-                    }
-                    catch(InternalException ex){
-                        logger.debug(ex.getMessage());
-                        return null;
+                    if(netMask.equals(""))destination = RuleTarget.getCIDR(ipAddress);
+                    else{
+                        try{
+                            destination = RuleTarget.getCIDR(toCidrNotation(ipAddress, netMask));
+                        }
+                        catch(InternalException ex){
+                            logger.debug(ex.getMessage());
+                            return null;
+                        }
                     }
                 }
             }
@@ -924,8 +935,8 @@ public class SecurityGroup implements FirewallSupport {
             //OpSource has a rule with an odd protocol by default that we don't want to add or display
             return null;
         }
-        if(source == null)source = RuleTarget.getGlobal(firewallId);
-        if(destination == null)destination = RuleTarget.getGlobal(firewallId);
+        if(source == null)source = RuleTarget.getCIDR("0.0.0.0/0");
+        if(destination == null)destination = RuleTarget.getCIDR("0.0.0.0/0");
 
         FirewallRule rule = FirewallRule.getInstance(providerRuleId + ":" + positionId, firewallId, source, direction, protocol, permission, destination, startPort, endPort);
         rule = rule.withPrecedence(positionId);

@@ -689,13 +689,13 @@ public class ServerImage implements MachineImageSupport {
 
     @Nonnull
     @Override
-    public Iterable<MachineImage> searchImages(@Nullable String s, @Nullable String s2, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
+    public Iterable<MachineImage> searchImages(@Nullable String accountNumber, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
         return null;  //TODO: Implement for 2013.01
     }
 
     @Nonnull
     @Override
-    public Iterable<MachineImage> searchPublicImages(@Nullable String s, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
+    public Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
         return null;  //TODO: Implement for 2013.01
     }
 

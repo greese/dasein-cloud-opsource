@@ -206,7 +206,6 @@ public class Network implements VLANSupport {
 
     @Override
     public VLAN createVlan(String cidr, String name, String description, String domainName, String[] dnsServers, String[] ntpServers) throws CloudException, InternalException {
-        
     	if( !allowsNewVlanCreation() ) {
             throw new OperationNotSupportedException("Dose not allow to create VLAN");
         }
@@ -252,7 +251,7 @@ public class Network implements VLANSupport {
     	OpSourceMethod method = new OpSourceMethod(provider, 
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", provider.convertDomToString(doc)));
-      	
+
     	String vlanId = method.getRequestResultId("Creating VLan", method.invoke(), "result", "resultDetail");
       	if(vlanId != null){
               CallCache.getInstance().resetCacheTimer("networkWithLocation");
@@ -260,7 +259,7 @@ public class Network implements VLANSupport {
       	}else{
               throw new CloudException("Creating VLan fails without explaination !!!");
       	}
-      	
+
     }
 
     @Override
