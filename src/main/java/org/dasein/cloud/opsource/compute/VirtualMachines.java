@@ -921,7 +921,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         int maxCPUNum = 0, maxMemInGB =0,  maxMemInMB = 0;
 
 		/** Obtain the maximum CPU and Memory for each data center */
-		String regionId = provider.getDefaultRegionId();
+		String regionId = provider.getContext().getRegionId();
 		HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
 		Param param = new Param(OpSource.LOCATION_BASE_PATH, null);
 		parameters.put(0, param);
