@@ -40,6 +40,7 @@ import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.util.JitCollection;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -687,7 +688,7 @@ config
         	LoadBalancers lbSupport = new LoadBalancers(provider);
         	ArrayList<LoadBalancer> lbs =  (ArrayList<LoadBalancer>) lbSupport.listLoadBalancers(networkId);
             
-        	ArrayList<VirtualMachine> vms =  (ArrayList<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+        	JitCollection<VirtualMachine> vms =  (JitCollection<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
 
         	for(int i=0;i < ipSize ; i++){
         		int lastSection = lastValue + i;

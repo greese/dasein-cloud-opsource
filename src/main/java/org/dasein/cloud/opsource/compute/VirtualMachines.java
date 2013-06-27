@@ -40,6 +40,9 @@ import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
 import org.dasein.util.CalendarWrapper;
+import org.dasein.util.Jiterator;
+import org.dasein.util.JiteratorPopulator;
+import org.dasein.util.PopulatorThread;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Megabyte;
 import org.dasein.util.uom.storage.Storage;
@@ -397,15 +400,15 @@ public class VirtualMachines implements VirtualMachineSupport {
 		return null;
 	}
 
-	public VirtualMachine getVirtualMachineByName(String name) throws InternalException, CloudException {
-		if( logger.isDebugEnabled() ) {
-			logger.debug("Identify VM with VM Name " + name);
-		}
+    public VirtualMachine getVirtualMachineByNameAndVlan(String name, String providerVlanId) throws InternalException, CloudException {
+        if( logger.isDebugEnabled() ) {
+            logger.debug("Identify VM with VM Name " + name);
+        }
 
-        ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>)listVirtualMachines();
-        for(VirtualMachine vm : list ){
+        //ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>)listVirtualMachines();
+        for(VirtualMachine vm : listVirtualMachines() ){
             try{
-                if(vm != null && vm.getName().equals(name)){
+                if(vm != null && vm.getName().equals(name) && vm.getProviderVlanId().equals(providerVlanId)){
                     return vm;
                 }
             }
@@ -428,11 +431,11 @@ public class VirtualMachines implements VirtualMachineSupport {
 			}
 		}
 		*/
-		if( logger.isDebugEnabled() ) {
-			logger.debug("Can not identify VM with VM Name " + name);
-		}
-		return null;
-	}
+        if( logger.isDebugEnabled() ) {
+            logger.debug("Can not identify VM with VM Name " + name);
+        }
+        return null;
+    }
 
 	@Override
 	public VmStatistics getVMStatistics(String serverId, long startTimestamp, long endTimestamp) throws InternalException, CloudException {
@@ -524,7 +527,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             String inZoneId = withLaunchOptions.getDataCenterId();
             final String name = withLaunchOptions.getHostName();
             String description = withLaunchOptions.getDescription();
-            String withVlanId = withLaunchOptions.getVlanId();
+            final String withVlanId = withLaunchOptions.getVlanId();
             
             /** First step get the target image */
             if( logger.isInfoEnabled() ) {
@@ -575,7 +578,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             //if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
             if(currentCPU == targetCPU && currentMemory == targetMemory){
                 if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ) {
-                    VirtualMachine server = getVirtualMachineByName(name);
+                    VirtualMachine server = getVirtualMachineByNameAndVlan(name, withVlanId);
                     server.setRootPassword(password);
                     return server;
                 }
@@ -591,7 +594,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 
                 if(targetImage != null) {
                     if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ){
-                        VirtualMachine server = getVirtualMachineByName(name);
+                        VirtualMachine server = getVirtualMachineByNameAndVlan(name, withVlanId);
                         server.setRootPassword(password);
                         return server;
                     }
@@ -609,7 +612,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 throw new CloudException("Fail to deploy VM without further information");
             }
 
-            final VirtualMachine server = getVirtualMachineByName(name);
+            final VirtualMachine server = getVirtualMachineByNameAndVlan(name, withVlanId);
 
             /** update the hardware (CPU, memory configuration)*/
             if(server == null){
@@ -623,7 +626,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                     try {
                         try {
                             //configure(server, name, currentCPU, currentMemory, currentDisk, targetCPU, targetMemory, targetDisk);
-                            configure(server, name, currentCPU, currentMemory, currentDisk, targetCPU, targetMemory);
+                            configure(server, name, withVlanId, currentCPU, currentMemory, currentDisk, targetCPU, targetMemory);
                         }
                         catch( Throwable t ) {
                             logger.error("Failed to complete configuration of " + server.getProviderVirtualMachineId() + " in OpSource: " + t.getMessage());
@@ -650,7 +653,7 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     //private void configure(VirtualMachine server, String name, int currentCPU, int currentMemory, int currentDisk, int targetCPU, int targetMemory, int targetDisk) {
-    private void configure(VirtualMachine server, String name, int currentCPU, int currentMemory, int currentDisk, int targetCPU, int targetMemory) {
+    private void configure(VirtualMachine server, String name, String providerVlanId, int currentCPU, int currentMemory, int currentDisk, int targetCPU, int targetMemory) {
         if( logger.isTraceEnabled() ) {
             //logger.trace("ENTER - " + VirtualMachines.class.getName() + ".configure(" + server + "," + name + "," + currentCPU + "," + currentMemory + "," + currentDisk + "," + targetCPU + "," + targetMemory + "," + targetDisk + ")");
             logger.trace("ENTER - " + VirtualMachines.class.getName() + ".configure(" + server + "," + name + "," + currentCPU + "," + currentMemory + "," + currentDisk + "," + targetCPU + "," + targetMemory + ")");
@@ -667,7 +670,7 @@ public class VirtualMachines implements VirtualMachineSupport {
 
                 /** VM has finished deployment before continuing, therefore wait 15s */
                 try {
-                    server = getVirtualMachineByName(name);
+                    server = getVirtualMachineByNameAndVlan(name, providerVlanId);
                 }
                 catch( Exception e ) {
                     logger.warn("Unable to load server for configuration: " + e.getMessage());
@@ -775,7 +778,7 @@ public class VirtualMachines implements VirtualMachineSupport {
             while( System.currentTimeMillis() < timeout ) {
                 try {
                     /** Begin to start the VM */
-                    server = getVirtualMachineByName(name);
+                    server = getVirtualMachineByNameAndVlan(name, providerVlanId);
                     if( server == null ) {
                         logger.error("Server disappeared while performing bootup");
                         return;
@@ -1009,6 +1012,71 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
+        PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
+            @Override
+            public void populate(@Nonnull Jiterator<VirtualMachine> iterator) throws Exception {
+                HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+                Param param = new Param(OpSource.SERVER_WITH_STATE, null);
+                parameters.put(0, param);
+
+                listPage(iterator, 1, 250, parameters);
+            }
+        });
+
+        populator.populate();
+        return populator.getResult();
+    }
+
+    private void listPage(final Jiterator<VirtualMachine> iterator, final int pageNumber, final int pageSize, final HashMap<Integer,Param> parameters) throws CloudException, InternalException {
+        boolean completeList = false;
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl("pageSize=" + pageSize + "&pageNumber=" + pageNumber + "&location=" + provider.getContext().getRegionId(), true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+
+        Document doc = method.invoke();
+        NodeList headMatches = doc.getElementsByTagName("ServersWithState");
+        Collection<VirtualMachine> next = null;
+
+        if(headMatches != null){
+            int currentPageSize = Integer.parseInt(headMatches.item(0).getAttributes().getNamedItem("pageCount").getNodeValue());
+
+            if( currentPageSize >= pageSize ) {
+                PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
+                    @Override
+                    public void populate(@Nonnull Jiterator<VirtualMachine> ignored) throws Exception {
+                        listPage(iterator, pageNumber+1, pageSize, parameters);
+                    }
+                });
+
+                populator.populate();
+                next = populator.getResult();
+            }
+        }
+        NodeList  matches = doc.getElementsByTagName("serverWithState");
+
+        if(matches != null){
+            for(int i=0;i<matches.getLength();i++){
+                VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
+                if(vm != null) {
+                    iterator.push(vm);
+                }
+            }
+        }
+        if( next != null ) {
+            // don't return from this method until ALL results from the next page are done
+            Iterator<VirtualMachine> it = next.iterator();
+
+            while( it.hasNext() ) {
+                it.next();
+            }
+            // we're done, it's done -> done, done
+        }
+    }
+
+    /*
+    @Override
+    public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
         ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
 
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
@@ -1045,6 +1113,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         if(!completeList) doListVirtualMachines(vms, parameters, pageSize, currentPage);
         return vms;
     }
+    */
 
     @Override
     public void pause(@Nonnull String vmId) throws InternalException, CloudException {
