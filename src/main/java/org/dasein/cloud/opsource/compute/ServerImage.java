@@ -326,7 +326,7 @@ public class ServerImage implements MachineImageSupport {
         Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
         parameters.put(0, param);
 
-        param = new Param(provider.getDefaultRegionId(), null);
+        param = new Param(provider.getContext().getRegionId(), null);
         parameters.put(1, param);
 
         OpSourceMethod method = new OpSourceMethod(provider,
@@ -413,7 +413,7 @@ public class ServerImage implements MachineImageSupport {
 	    	param = new Param(DEPLOYED_PATH, null);
 	    	parameters.put(1, param);
 	    	
-	    	param = new Param(provider.getDefaultRegionId(), null);
+	    	param = new Param(provider.getContext().getRegionId(), null);
 	    	parameters.put(2, param);   	
 	    
 	    	OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(null, true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
@@ -452,7 +452,7 @@ public class ServerImage implements MachineImageSupport {
     	param = new Param(PENDING_DEPLOY_PATH, null);
     	parameters.put(1, param);
     	
-    	param = new Param(provider.getDefaultRegionId(), null);
+    	param = new Param(provider.getContext().getRegionId(), null);
     	parameters.put(2, param);
     
     	OpSourceMethod method = new OpSourceMethod(provider,
@@ -490,7 +490,7 @@ public class ServerImage implements MachineImageSupport {
     	Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
     	parameters.put(0, param);
     	
-    	param = new Param(provider.getDefaultRegionId(), null);
+    	param = new Param(provider.getContext().getRegionId(), null);
     	parameters.put(1, param);
     
     	OpSourceMethod method = new OpSourceMethod(provider,
@@ -808,54 +808,50 @@ public class ServerImage implements MachineImageSupport {
                     bestArchitectureGuess = Architecture.I32;
                 }
             }
-            else if( name.equals(nameSpaceString + "machineSpecification") ) {
-            	NodeList machineAttributes  = attribute.getChildNodes();
-            	for(int j=0;j<machineAttributes.getLength();j++ ){
-            		Node machine = machineAttributes.item(j);
-	            	if( machine.getNodeName().equals(nameSpaceString + "operatingSystem") ){
-		            	 NodeList osAttributes  = machine.getChildNodes();
-		            	 for(int k=0;k<osAttributes.getLength();k++ ){
-		            		 Node os = osAttributes.item(k);
-		            		 
-		            		 if(os.getNodeType() == Node.TEXT_NODE) continue;
-		            		 
-		            		 String osName = os.getNodeName();
-		                     
-		            		 String osValue = null ;
-		            		 
-		                     if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
-		                    	 osValue = os.getFirstChild().getNodeValue();
-		                     }
-		                     else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-			                     image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));			                       
-		                     }
-		                     else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
-		                    	 
-		                    	 image.getTags().put("cpuCount", os.getFirstChild().getNodeValue());
-		                     }  
-		                     else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-		                    	 image.getTags().put("memory", os.getFirstChild().getNodeValue());
-		                     }
-		                     
-		                     if( osValue != null ) {
-		                    	 bestArchitectureGuess = guess(osValue);
-		            		 }		            		           		     		 
-		            	 }
-	            	}
-            	}             
+            else if(name.equals(nameSpaceString + "machineSpecification")) {
+                NodeList machineAttributes  = attribute.getChildNodes();
+                for(int j=0;j<machineAttributes.getLength();j++ ){
+                    Node machine = machineAttributes.item(j);
+                    if( machine.getNodeName().equals(nameSpaceString + "operatingSystem") ){
+                        NodeList osAttributes  = machine.getChildNodes();
+                        for(int k=0;k<osAttributes.getLength();k++ ){
+                            Node os = osAttributes.item(k);
+
+                            if(os.getNodeType() == Node.TEXT_NODE) continue;
+
+                            String osName = os.getNodeName();
+
+                            String osValue = null ;
+
+                            if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
+                                osValue = os.getFirstChild().getNodeValue();
+                            }
+                            else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
+                                image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));
+                            }
+
+                            if( osValue != null ) {
+                                bestArchitectureGuess = guess(osValue);
+                            }
+                        }
+                    }
+                    else if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "cpuCount") && machine.getFirstChild().getNodeValue() != null ) {
+
+                        image.getTags().put("cpuCount", machine.getFirstChild().getNodeValue());
+                    }
+                    else if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "memoryMb") && machine.getFirstChild().getNodeValue() != null ) {
+                        image.getTags().put("memory", machine.getFirstChild().getNodeValue());
+                    }
+                }
             }
             else if( name.equals(nameSpaceString + "operatingSystem") ) {
-            	
            	 	NodeList osAttributes  = attribute.getChildNodes();
            	 	
            	 	for(int j=0;j<osAttributes.getLength();j++ ){
-           	 		
            	 		Node os = osAttributes.item(j);
-           	 		         
            	 		if(os.getNodeType() == Node.TEXT_NODE) continue;
         		 
-	        		 String osName = os.getNodeName();              
-	                 
+	        		 String osName = os.getNodeName();
 	        		 String osValue = null ;
 	        		 
 	                 if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
@@ -864,15 +860,6 @@ public class ServerImage implements MachineImageSupport {
 	                 else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
 	                     image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));			                       
 	                 }
-	                 else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
-	                	 
-	                	 image.getTags().put("cpuCount", os.getFirstChild().getNodeValue());
-	                 }  
-	                 else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-	                   
-	                	 image.getTags().put("memory", os.getFirstChild().getNodeValue());
-	                 }
-	                 	                           	
 	           		 if( osValue != null  ) {
 	                      bestArchitectureGuess = guess(osValue);
 	           		 }
@@ -880,8 +867,7 @@ public class ServerImage implements MachineImageSupport {
 	           		 if( osValue != null ) {	           			 
 	           			 image.setPlatform(Platform.guess(osValue));	                    
 	           		 }           		 
-           	 	}            	
-            
+           	 	}
            }
            else if(name.equals(nameSpaceString + "location") && value != null) {
         	   if(!provider.getContext().getRegionId().equalsIgnoreCase(value)){
