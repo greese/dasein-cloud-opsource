@@ -406,7 +406,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         }
 
         //ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>)listVirtualMachines();
-        for(VirtualMachine vm : listVirtualMachines() ){
+        for(VirtualMachine vm : listVirtualMachines(true) ){
             try{
                 if(vm != null && vm.getName().equals(name) && vm.getProviderVlanId().equals(providerVlanId)){
                     return vm;
@@ -1010,6 +1010,22 @@ public class VirtualMachines implements VirtualMachineSupport {
         return list;
     }
 
+    public @Nonnull Iterable<VirtualMachine> listVirtualMachines(final boolean withOrdering) throws InternalException, CloudException {
+        PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
+            @Override
+            public void populate(@Nonnull Jiterator<VirtualMachine> iterator) throws Exception {
+                HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+                Param param = new Param(OpSource.SERVER_WITH_STATE, null);
+                parameters.put(0, param);
+
+                listPage(iterator, 1, 250, parameters, withOrdering);
+            }
+        });
+
+        populator.populate();
+        return populator.getResult();
+    }
+
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
         PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
@@ -1019,7 +1035,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 Param param = new Param(OpSource.SERVER_WITH_STATE, null);
                 parameters.put(0, param);
 
-                listPage(iterator, 1, 250, parameters);
+                listPage(iterator, 1, 250, parameters, false);
             }
         });
 
@@ -1027,11 +1043,15 @@ public class VirtualMachines implements VirtualMachineSupport {
         return populator.getResult();
     }
 
-    private void listPage(final Jiterator<VirtualMachine> iterator, final int pageNumber, final int pageSize, final HashMap<Integer,Param> parameters) throws CloudException, InternalException {
+    private void listPage(final Jiterator<VirtualMachine> iterator, final int pageNumber, final int pageSize, final HashMap<Integer,Param> parameters, final boolean withOrdering) throws CloudException, InternalException {
         boolean completeList = false;
+        String sortAndOrder = "";
+        if(withOrdering){
+            sortAndOrder = "&orderBy=created.desc&state=PENDING_ADD&state=NORMAL&state=PENDING_CHANGE";
+        }
 
         OpSourceMethod method = new OpSourceMethod(provider,
-                provider.buildUrl("pageSize=" + pageSize + "&pageNumber=" + pageNumber + "&location=" + provider.getContext().getRegionId(), true, parameters),
+                provider.buildUrl("pageSize=" + pageSize + "&pageNumber=" + pageNumber + "&location=" + provider.getContext().getRegionId() + sortAndOrder, true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
 
         Document doc = method.invoke();
@@ -1045,7 +1065,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
                     @Override
                     public void populate(@Nonnull Jiterator<VirtualMachine> ignored) throws Exception {
-                        listPage(iterator, pageNumber+1, pageSize, parameters);
+                        listPage(iterator, pageNumber+1, pageSize, parameters, withOrdering);
                     }
                 });
 
@@ -1505,6 +1525,8 @@ public class VirtualMachines implements VirtualMachineSupport {
 
         boolean isDeployed = false;
         boolean pendingChange = false;
+        String serverState = "";
+        String failureReason = "";
         //ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
         HashMap<String, String> attachedDisks = new HashMap<String, String>();
 
@@ -1617,6 +1639,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 else server.setCurrentState(VmState.STOPPED);
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "state")){
+                serverState = value.trim();
                 if(isDeployed && value.equals("PENDING_CHANGE"))pendingChange = true;
                 else if(!isDeployed && value.equals("PENDING_ADD"))server.setCurrentState(VmState.PENDING);
             }
@@ -1625,6 +1648,7 @@ public class VirtualMachines implements VirtualMachineSupport {
                 if(status != null){
                     for(int j=0;j<status.getLength();j++){
                         Node statusNode = status.item(j);
+
                         if(statusNode.getNodeName().equalsIgnoreCase(nameSpaceString + "action")){
                             String action = statusNode.getFirstChild().getNodeValue().trim();
                             if(action.equalsIgnoreCase("START_SERVER")){
@@ -1638,6 +1662,19 @@ public class VirtualMachines implements VirtualMachineSupport {
                                 server.setLastBootTimestamp(System.currentTimeMillis());
                             }
                             else server.setCurrentState(VmState.PENDING);
+                        }
+                    }
+                }
+            }
+            else if(!serverState.equals("NORMAL") && !serverState.equals("PENDING_ADD") && !serverState.equals("PENDING_CHANGE") && !serverState.equals("PENDING_DELETE") && name.equalsIgnoreCase(nameSpaceString + "status")){
+                //Any other state is in error
+                server.setCurrentState(VmState.SUSPENDED);
+                NodeList status = attribute.getChildNodes();
+                if(status != null){
+                    for(int j=0;j<status.getLength();j++){
+                        Node statusNode = status.item(j);
+                        if(statusNode.getNodeName().equalsIgnoreCase(nameSpaceString + "failureReason")){
+                            failureReason = statusNode.getFirstChild().getNodeValue().trim();
                         }
                     }
                 }
@@ -1673,6 +1710,10 @@ public class VirtualMachines implements VirtualMachineSupport {
             product.setDescription(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");*/
 
             server.setProductId(cpuCount + ":" + memoryInMb + ":" + diskString);
+        }
+        if(server.getCurrentState().equals(VmState.SUSPENDED) && !failureReason.equals("")){
+            server.setTag("serverState", serverState);
+            server.setTag("failureReason", failureReason);
         }
         return server;
     }

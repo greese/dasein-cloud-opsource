@@ -49,6 +49,8 @@ import org.dasein.cloud.network.VLAN;
 import org.dasein.cloud.network.VLANSupport;
 import org.dasein.cloud.opsource.compute.OpSourceComputeServices;
 import org.dasein.cloud.opsource.network.OpSourceNetworkServices;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
 import org.w3c.dom.Document;
 
 import org.w3c.dom.Node;
@@ -122,8 +124,7 @@ public class OpSource extends AbstractCloud {
 	
 	final String OpSource_OrgId_Key = "orgId";
 	final String OpSource_VERSION = "/oec/0.9";
-		
-	public String orgId = null;
+
 	public String defaultVlanId = null;
 	private String defaultRegionId = null;
 	private String defaultAdminPasswordForVM = null;
@@ -287,7 +288,7 @@ public class OpSource extends AbstractCloud {
 			throw new CloudException ("No such image");
 		}
 		if(image.getProviderOwnerId() == this.getContext().getAccountNumber()){
-			return "/oec/"+ getOraginzationId()+"/image/"+ imageId;	
+			return "/oec/"+ this.getOrgId(getEndpoint(getContext().getRegionId()))+"/image/"+ imageId;
 		}else{
 			return "/oec/base/image/"+ imageId;	
 		}		
@@ -406,31 +407,37 @@ public class OpSource extends AbstractCloud {
 		
 	}
 	
-	
 	public String getOrgId(String endpoint) throws InternalException,CloudException{
-		if(orgId == null){
-			//String url = "https://api.opsourcecloud.net/oec/0.9/myaccount";
-            String url = endpoint + "/oec/0.9/myaccount";
-			HashMap<String,String> parameters = new HashMap<String,String>();
-			
-			parameters.put(Content_Type_Key, Content_Type_Value_Single_Para);
-			parameters.put(HTTP_Method_Key, "GET");
+        Cache<String> daseinCache = Cache.getInstance(this, "orgId", String.class, CacheLevel.REGION);
+        Collection<String> orgIds = (Collection<String>)daseinCache.get(this.getContext());
 
-			OpSourceMethod method = new OpSourceMethod(this, url, parameters);
-			Document doc = method.invoke();
+        String orgId = "";
+        if(orgIds == null){
+            String url = endpoint + "/oec/0.9/myaccount";
+            HashMap<String,String> parameters = new HashMap<String,String>();
+
+            parameters.put(Content_Type_Key, Content_Type_Value_Single_Para);
+            parameters.put(HTTP_Method_Key, "GET");
+
+            OpSourceMethod method = new OpSourceMethod(this, url, parameters);
+            Document doc = method.invoke();
             String sNS = "";
             try{
                 sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
             }
             catch(IndexOutOfBoundsException ex){}
-			NodeList blocks = doc.getElementsByTagName(sNS + "orgId");
-			if(blocks != null){
-				orgId = blocks.item(0).getFirstChild().getNodeValue();
-			
-		    }else{
-		    	throw new CloudException("Can not load orgId information!!!");
-		    }
-		}
+            NodeList blocks = doc.getElementsByTagName(sNS + "orgId");
+            if(blocks != null){
+                orgId = blocks.item(0).getFirstChild().getNodeValue();
+                orgIds = new ArrayList<String>();
+                orgIds.add(orgId);
+                daseinCache.put(this.getContext(), orgIds);
+
+            }else{
+                throw new CloudException("Can not load orgId information!!!");
+            }
+        }
+        else orgId = daseinCache.get(getContext()).iterator().next();
 		return orgId;		
 	}
 
@@ -559,10 +566,6 @@ public class OpSource extends AbstractCloud {
             return "OpSource";
         }
         return name;
-	}
-		
-	public String getOraginzationId(){
-		return orgId;
 	}
 		
 	@Override
