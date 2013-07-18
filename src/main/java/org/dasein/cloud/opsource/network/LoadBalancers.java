@@ -48,6 +48,7 @@ import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.util.JitCollection;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -523,7 +524,7 @@ serverFarm/{server-farm-id}/addRealServer
             }
 
             /** Use Server's VLan */
-            ArrayList<VirtualMachine> vms = (ArrayList<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+            JitCollection<VirtualMachine> vms = (JitCollection<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
             boolean firstServer = true;
             String networkId = null;
             for(String server: servers){

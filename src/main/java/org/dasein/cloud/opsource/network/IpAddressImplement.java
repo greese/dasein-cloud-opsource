@@ -46,6 +46,7 @@ import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.util.JitCollection;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -726,14 +727,13 @@ public class IpAddressImplement implements IpAddressSupport {
         }
 
         if(baseIp != null && ipSize >0 ){
-
             String prefix = baseIp.substring(0, baseIp.lastIndexOf(".")+1);
-            int lastValue = Integer.parseInt(baseIp.substring(baseIp.lastIndexOf(".")+1));
-
-            LoadBalancers lbSupport = new LoadBalancers(provider);
-            ArrayList<LoadBalancer> lbs =  (ArrayList<LoadBalancer>) lbSupport.listLoadBalancers(networkId);
-
-            ArrayList<VirtualMachine> vms =  (ArrayList<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+        	int lastValue = Integer.parseInt(baseIp.substring(baseIp.lastIndexOf(".")+1));
+        	        	
+        	LoadBalancers lbSupport = new LoadBalancers(provider);
+        	ArrayList<LoadBalancer> lbs =  (ArrayList<LoadBalancer>) lbSupport.listLoadBalancers(networkId);
+            
+        	JitCollection<VirtualMachine> vms =  (JitCollection<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
 
             for(int i=0;i < ipSize ; i++){
                 int lastSection = lastValue + i;

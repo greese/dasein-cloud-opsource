@@ -203,7 +203,7 @@ public class OpSourceMethod {
 	            }else{
 	            	throw new CloudException("The request body is null for a post request");
 	            }                
-            }           
+            }
 	        
 	        /** Now parse the xml */
 	        try {
@@ -244,6 +244,7 @@ public class OpSourceMethod {
                 }
 
                 String responseBody = EntityUtils.toString(entity);
+
         		if( status == HttpStatus.SC_OK ) {
                     InputStream input = null;
                     try {
@@ -294,22 +295,7 @@ public class OpSourceMethod {
                 else if(status == HttpStatus.SC_NOT_FOUND){
                     throw new CloudException("An internal error occured: The endpoint was not found");
                 }
-        		else{        			
-                    /*String resultXML = null;
-                    try {                    	
-                    	resultXML = EntityUtils.toString(entity);
-                    }
-                    catch( IOException e ) {
-                        logger.error("invoke(): Failed to read xml error due to a cloud I/O error: " + e.getMessage());
-                        if( logger.isTraceEnabled() ) {
-                            e.printStackTrace();
-                        }
-                        throw new CloudException(e);                    
-                    }
-                    if(resultXML != null){
-                    	parseError(status, resultXML);
-                        return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(resultXML);
-                    } */
+        		else{
                     if(responseBody != null){
                         parseError(status, responseBody);
                         Document parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
@@ -427,15 +413,6 @@ public class OpSourceMethod {
         }
         catch(IndexOutOfBoundsException ex){}
     	NodeList blocks = doc.getElementsByTagName(sNS + resultTag);
-
-        try{
-            StringWriter stw = new StringWriter();
-            Transformer serializer = TransformerFactory.newInstance().newTransformer();
-            serializer.transform(new DOMSource(doc), new StreamResult(stw));
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
 
     	if(blocks != null){
     		for(int i=0;i< blocks.getLength();i++){

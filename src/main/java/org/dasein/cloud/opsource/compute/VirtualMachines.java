@@ -19,6 +19,7 @@
 package org.dasein.cloud.opsource.compute;
 
 
+import java.io.StringWriter;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -26,6 +27,11 @@ import java.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
@@ -41,6 +47,9 @@ import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
 import org.dasein.util.CalendarWrapper;
+import org.dasein.util.Jiterator;
+import org.dasein.util.JiteratorPopulator;
+import org.dasein.util.PopulatorThread;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Megabyte;
 import org.dasein.util.uom.storage.Storage;
@@ -323,7 +332,6 @@ public class VirtualMachines extends AbstractVMSupport {
         return VMScalingCapabilities.getInstance(false, true, Requirement.OPTIONAL, Requirement.OPTIONAL);
     }
 
-
     @Override
     public int getCostFactor(@Nonnull VmState vmState) throws InternalException, CloudException {
         return (vmState.equals(VmState.STOPPED) ? 0 : 100);
@@ -388,15 +396,15 @@ public class VirtualMachines extends AbstractVMSupport {
         }
     }
 
-    public VirtualMachine getVirtualMachineByName(String name) throws InternalException, CloudException {
+    public VirtualMachine getVirtualMachineByNameAndVlan(String name, String providerVlanId) throws InternalException, CloudException {
         if( logger.isDebugEnabled() ) {
             logger.debug("Identify VM with VM Name " + name);
         }
 
-        ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>)listVirtualMachines();
-        for(VirtualMachine vm : list ){
+        //ArrayList<VirtualMachine> list = (ArrayList<VirtualMachine>)listVirtualMachines();
+        for(VirtualMachine vm : listVirtualMachines(true) ){
             try{
-                if(vm != null && vm.getName().equals(name)){
+                if(vm != null && vm.getName().equals(name) && vm.getProviderVlanId().equals(providerVlanId)){
                     return vm;
                 }
             }
@@ -492,7 +500,7 @@ public class VirtualMachines extends AbstractVMSupport {
             String inZoneId = withLaunchOptions.getDataCenterId();
             final String name = withLaunchOptions.getHostName();
             String description = withLaunchOptions.getDescription();
-            String withVlanId = withLaunchOptions.getVlanId();
+            final String withVlanId = withLaunchOptions.getVlanId();
 
             /** First step get the target image */
             if( logger.isInfoEnabled() ) {
@@ -512,8 +520,8 @@ public class VirtualMachines extends AbstractVMSupport {
             //String volumeSizes;
             String[] productIds = productString.split(":");
             if (productIds.length == 2) {
-            	cpuCount = productIds[0];
-            	ramSize = productIds[1];
+                cpuCount = productIds[0];
+                ramSize = productIds[1];
             }
             else {
                 throw new InternalError("Invalid product id string");
@@ -543,7 +551,7 @@ public class VirtualMachines extends AbstractVMSupport {
             //if( targetDisk == 0 && currentCPU == targetCPU && currentMemory == targetMemory ){
             if(currentCPU == targetCPU && currentMemory == targetMemory){
                 if( deploy(origImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ) {
-                    VirtualMachine server = getVirtualMachineByName(name);
+                    VirtualMachine server = getVirtualMachineByNameAndVlan(name, withVlanId);
                     server.setRootPassword(password);
                     return server;
                 }
@@ -559,7 +567,7 @@ public class VirtualMachines extends AbstractVMSupport {
 
                 if(targetImage != null) {
                     if( deploy(targetImage.getProviderMachineImageId(), inZoneId, name, description, withVlanId, password, "true") ){
-                        VirtualMachine server = getVirtualMachineByName(name);
+                        VirtualMachine server = getVirtualMachineByNameAndVlan(name, withVlanId);
                         server.setRootPassword(password);
                         return server;
                     }
@@ -577,7 +585,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 throw new CloudException("Fail to deploy VM without further information");
             }
 
-            final VirtualMachine server = getVirtualMachineByName(name);
+            final VirtualMachine server = getVirtualMachineByNameAndVlan(name, withVlanId);
 
             /** update the hardware (CPU, memory configuration)*/
             if(server == null){
@@ -591,7 +599,7 @@ public class VirtualMachines extends AbstractVMSupport {
                     try {
                         try {
                             //configure(server, name, currentCPU, currentMemory, currentDisk, targetCPU, targetMemory, targetDisk);
-                            configure(server, name, currentCPU, currentMemory, currentDisk, targetCPU, targetMemory);
+                            configure(server, name, withVlanId, currentCPU, currentMemory, currentDisk, targetCPU, targetMemory);
                         }
                         catch( Throwable t ) {
                             logger.error("Failed to complete configuration of " + server.getProviderVirtualMachineId() + " in OpSource: " + t.getMessage());
@@ -615,7 +623,7 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     //private void configure(VirtualMachine server, String name, int currentCPU, int currentMemory, int currentDisk, int targetCPU, int targetMemory, int targetDisk) {
-    private void configure(VirtualMachine server, String name, int currentCPU, int currentMemory, int currentDisk, int targetCPU, int targetMemory) {
+    private void configure(VirtualMachine server, String name, String providerVlanId, int currentCPU, int currentMemory, int currentDisk, int targetCPU, int targetMemory) {
         APITrace.begin(getProvider(), "VM.configure");
         try {
             if( logger.isInfoEnabled() ) {
@@ -629,7 +637,7 @@ public class VirtualMachines extends AbstractVMSupport {
 
                 /** VM has finished deployment before continuing, therefore wait 15s */
                 try {
-                    server = getVirtualMachineByName(name);
+                    server = getVirtualMachineByNameAndVlan(name, providerVlanId);
                 }
                 catch( Exception e ) {
                     logger.warn("Unable to load server for configuration: " + e.getMessage());
@@ -737,7 +745,7 @@ public class VirtualMachines extends AbstractVMSupport {
             while( System.currentTimeMillis() < timeout ) {
                 try {
                     /** Begin to start the VM */
-                    server = getVirtualMachineByName(name);
+                    server = getVirtualMachineByNameAndVlan(name, providerVlanId);
                     if( server == null ) {
                         logger.error("Server disappeared while performing bootup");
                         return;
@@ -964,6 +972,92 @@ public class VirtualMachines extends AbstractVMSupport {
         return list;
     }
 
+    public @Nonnull Iterable<VirtualMachine> listVirtualMachines(final boolean withOrdering) throws InternalException, CloudException {
+        PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
+            @Override
+            public void populate(@Nonnull Jiterator<VirtualMachine> iterator) throws Exception {
+                HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+                Param param = new Param(OpSource.SERVER_WITH_STATE, null);
+                parameters.put(0, param);
+
+                listPage(iterator, 1, 250, parameters, withOrdering);
+            }
+        });
+
+        populator.populate();
+        return populator.getResult();
+    }
+
+    @Override
+    public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
+        PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
+            @Override
+            public void populate(@Nonnull Jiterator<VirtualMachine> iterator) throws Exception {
+                HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+                Param param = new Param(OpSource.SERVER_WITH_STATE, null);
+                parameters.put(0, param);
+
+                listPage(iterator, 1, 250, parameters, false);
+            }
+        });
+
+        populator.populate();
+        return populator.getResult();
+    }
+
+    private void listPage(final Jiterator<VirtualMachine> iterator, final int pageNumber, final int pageSize, final HashMap<Integer,Param> parameters, final boolean withOrdering) throws CloudException, InternalException {
+        boolean completeList = false;
+        String sortAndOrder = "";
+        if(withOrdering){
+            sortAndOrder = "&orderBy=created.desc&state=PENDING_ADD&state=NORMAL&state=PENDING_CHANGE";
+        }
+
+        OpSourceMethod method = new OpSourceMethod(provider,
+                provider.buildUrl("pageSize=" + pageSize + "&pageNumber=" + pageNumber + "&location=" + provider.getContext().getRegionId() + sortAndOrder, true, parameters),
+                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+
+        Document doc = method.invoke();
+        NodeList headMatches = doc.getElementsByTagName("ServersWithState");
+        Collection<VirtualMachine> next = null;
+
+        if(headMatches != null){
+
+            int currentPageSize = Integer.parseInt(headMatches.item(0).getAttributes().getNamedItem("pageCount").getNodeValue());
+
+            if( currentPageSize >= pageSize ) {
+                PopulatorThread<VirtualMachine> populator = new PopulatorThread<VirtualMachine>(new JiteratorPopulator<VirtualMachine>() {
+                    @Override
+                    public void populate(@Nonnull Jiterator<VirtualMachine> ignored) throws Exception {
+                        listPage(iterator, pageNumber+1, pageSize, parameters, withOrdering);
+                    }
+                });
+
+                populator.populate();
+                next = populator.getResult();
+            }
+        }
+        NodeList  matches = doc.getElementsByTagName("serverWithState");
+
+        if(matches != null){
+            for(int i=0;i<matches.getLength();i++){
+                VirtualMachine vm = toVirtualMachineWithStatus(matches.item(i), "");
+                if(vm != null) {
+                    iterator.push(vm);
+                }
+            }
+        }
+        if( next != null ) {
+            // don't return from this method until ALL results from the next page are done
+            Iterator<VirtualMachine> it = next.iterator();
+
+            while( it.hasNext() ) {
+                it.next();
+            }
+            // we're done, it's done -> done, done
+        }
+    }
+
+    /*
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
         ArrayList<VirtualMachine> vms = new ArrayList<VirtualMachine>();
@@ -1002,6 +1096,7 @@ public class VirtualMachines extends AbstractVMSupport {
         if(!completeList) doListVirtualMachines(vms, parameters, pageSize, currentPage);
         return vms;
     }
+    */
 
     @Override
     public void pause(@Nonnull String vmId) throws InternalException, CloudException {
@@ -1381,6 +1476,8 @@ public class VirtualMachines extends AbstractVMSupport {
 
         boolean isDeployed = false;
         boolean pendingChange = false;
+        String serverState = "";
+        String failureReason = "";
         //ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
         HashMap<String, String> attachedDisks = new HashMap<String, String>();
 
@@ -1493,6 +1590,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 else server.setCurrentState(VmState.STOPPED);
             }
             else if(name.equalsIgnoreCase(nameSpaceString + "state")){
+                serverState = value.trim();
                 if(isDeployed && value.equals("PENDING_CHANGE"))pendingChange = true;
                 else if(!isDeployed && value.equals("PENDING_ADD"))server.setCurrentState(VmState.PENDING);
             }
@@ -1501,6 +1599,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 if(status != null){
                     for(int j=0;j<status.getLength();j++){
                         Node statusNode = status.item(j);
+
                         if(statusNode.getNodeName().equalsIgnoreCase(nameSpaceString + "action")){
                             String action = statusNode.getFirstChild().getNodeValue().trim();
                             if(action.equalsIgnoreCase("START_SERVER")){
@@ -1514,6 +1613,19 @@ public class VirtualMachines extends AbstractVMSupport {
                                 server.setLastBootTimestamp(System.currentTimeMillis());
                             }
                             else server.setCurrentState(VmState.PENDING);
+                        }
+                    }
+                }
+            }
+            else if(!serverState.equals("NORMAL") && !serverState.equals("PENDING_ADD") && !serverState.equals("PENDING_CHANGE") && !serverState.equals("PENDING_DELETE") && name.equalsIgnoreCase(nameSpaceString + "status")){
+                //Any other state is in error
+                server.setCurrentState(VmState.SUSPENDED);
+                NodeList status = attribute.getChildNodes();
+                if(status != null){
+                    for(int j=0;j<status.getLength();j++){
+                        Node statusNode = status.item(j);
+                        if(statusNode.getNodeName().equalsIgnoreCase(nameSpaceString + "failureReason")){
+                            failureReason = statusNode.getFirstChild().getNodeValue().trim();
                         }
                     }
                 }
@@ -1550,6 +1662,10 @@ public class VirtualMachines extends AbstractVMSupport {
 
             server.setProductId(cpuCount + ":" + memoryInMb + ":" + diskString);
             System.out.println("Server product String: " + server.getProductId());
+        }
+        if(server.getCurrentState().equals(VmState.SUSPENDED) && !failureReason.equals("")){
+            server.setTag("serverState", serverState);
+            server.setTag("failureReason", failureReason);
         }
         return server;
     }
@@ -1759,7 +1875,6 @@ public class VirtualMachines extends AbstractVMSupport {
                     Node status = statusAttributes.item(j);
                     if(status.getNodeType() == Node.TEXT_NODE) continue;
                     if( status.getNodeName().equalsIgnoreCase(nameSpaceString + "step") ){
-                        //TODO
                         /** If it is this status means it is pending */
                         server.setCurrentState(VmState.PENDING);
                     }

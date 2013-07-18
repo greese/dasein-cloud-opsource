@@ -302,7 +302,7 @@ public class ServerImage extends AbstractImageSupport {
         Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
         parameters.put(0, param);
 
-        param = new Param(provider.getDefaultRegionId(), null);
+        param = new Param(provider.getContext().getRegionId(), null);
         parameters.put(1, param);
 
         OpSourceMethod method = new OpSourceMethod(provider,
@@ -370,7 +370,7 @@ public class ServerImage extends AbstractImageSupport {
 	    	param = new Param(DEPLOYED_PATH, null);
 	    	parameters.put(1, param);
 	    	
-	    	param = new Param(provider.getDefaultRegionId(), null);
+	    	param = new Param(provider.getContext().getRegionId(), null);
 	    	parameters.put(2, param);   	
 	    
 	    	OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(null, true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
@@ -409,7 +409,7 @@ public class ServerImage extends AbstractImageSupport {
     	param = new Param(PENDING_DEPLOY_PATH, null);
     	parameters.put(1, param);
     	
-    	param = new Param(provider.getDefaultRegionId(), null);
+    	param = new Param(provider.getContext().getRegionId(), null);
     	parameters.put(2, param);
     
     	OpSourceMethod method = new OpSourceMethod(provider,
@@ -433,8 +433,7 @@ public class ServerImage extends AbstractImageSupport {
     	
         return list;
     }
-    
-    
+
     public Iterable<MachineImage> listOpSourceMachineImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
         APITrace.begin(provider, "Image.listOpSourceMachineImages");
         try {
@@ -475,7 +474,6 @@ public class ServerImage extends AbstractImageSupport {
             APITrace.end();
         }
     }
-
 
     @Nonnull
     @Override
@@ -596,27 +594,38 @@ public class ServerImage extends AbstractImageSupport {
     }
 
     private MachineImage toImage(Node node, boolean isCustomerDeployed, boolean isPending, String nameSpace) throws CloudException, InternalException {
-        HashMap<String,String> tags = new HashMap<String, String>();
-        String ownerId = provider.getContext().getAccountNumber();
-        NodeList attributes = node.getChildNodes();
-        Architecture bestArchitectureGuess = null;
+        Architecture bestArchitectureGuess = Architecture.I64;
+        MachineImage image = new MachineImage();
 
-        if( !isCustomerDeployed ) {
-            ownerId = "--public--";
+        HashMap<String,String> properties = new HashMap<String,String>();
+        image.setTags(properties);
+
+        NodeList attributes = node.getChildNodes();
+
+        if(isCustomerDeployed){
+
+            image.setProviderOwnerId(provider.getContext().getAccountNumber());
+
+        }else{
+            /** Default owner is opsource */
+            image.setProviderOwnerId(provider.getCloudName());
         }
-        MachineImageState currentState = isPending ? MachineImageState.PENDING : MachineImageState.ACTIVE;
-        String imageId = null, imageName = null, description = null, regionId = null, software = "";
-        Platform platform = null;
-        long created = 0L;
+
+        image.setType(MachineImageType.STORAGE);
+        if(isPending){
+            image.setCurrentState(MachineImageState.PENDING);
+        }else{
+            image.setCurrentState(MachineImageState.ACTIVE);
+        }
 
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
-            
+
             if(attribute.getNodeType() == Node.TEXT_NODE) continue;
-            
+
             String name = attribute.getNodeName();
             String value;
-            
+
             if( attribute.getChildNodes().getLength() > 0 ) {
                 value = attribute.getFirstChild().getNodeValue();
             }
@@ -628,165 +637,143 @@ public class ServerImage extends AbstractImageSupport {
             if(!nameSpace.equals("")) nameSpaceString = nameSpace + ":";
 
             if( name.equals(nameSpaceString + "id") ) {
-                imageId = value;
+                image.setProviderMachineImageId(value);
             }else if(name.equals(nameSpaceString + "resourcePath") && value != null ){
-            	tags.put("resourcePath", value);
-            }            
+                image.getTags().put("resourcePath", value);
+            }
             else if( name.equals(nameSpaceString + "name") ) {
-                imageName = value;
-                if( bestArchitectureGuess == null ) {
-                    if(  value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
-                        bestArchitectureGuess = Architecture.I64;
-                    }
-                    else if(value.contains("x32") ) {
-                        bestArchitectureGuess = Architecture.I32;
-                    }
+                image.setName(value);
+                if(  value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
+                    bestArchitectureGuess = Architecture.I64;
+                }
+                else if(value.contains("x32") ) {
+                    bestArchitectureGuess = Architecture.I32;
                 }
             }
             else if( name.equals(nameSpaceString + "description") ) {
-                description = value;
-                if( bestArchitectureGuess == null ) {
-                    if( value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
-                        bestArchitectureGuess = Architecture.I64;
+                image.setDescription(value);
+                if( value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
+                    bestArchitectureGuess = Architecture.I64;
+                }
+                else if( value.contains("x32") ||  value.contains("32-bit") ||  value.contains("32 bit")) {
+                    bestArchitectureGuess = Architecture.I32;
+                }
+            }
+            else if(name.equals(nameSpaceString + "machineSpecification")) {
+                NodeList machineAttributes  = attribute.getChildNodes();
+                for(int j=0;j<machineAttributes.getLength();j++ ){
+                    Node machine = machineAttributes.item(j);
+                    if( machine.getNodeName().equals(nameSpaceString + "operatingSystem") ){
+                        NodeList osAttributes  = machine.getChildNodes();
+                        for(int k=0;k<osAttributes.getLength();k++ ){
+                            Node os = osAttributes.item(k);
+
+                            if(os.getNodeType() == Node.TEXT_NODE) continue;
+
+                            String osName = os.getNodeName();
+
+                            String osValue = null ;
+
+                            if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
+                                osValue = os.getFirstChild().getNodeValue();
+                            }
+                            else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
+                                image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));
+                            }
+
+                            if( osValue != null ) {
+                                bestArchitectureGuess = guess(osValue);
+                            }
+                        }
                     }
-                    else if( value.contains("x32") ||  value.contains("32-bit") ||  value.contains("32 bit")) {
-                        bestArchitectureGuess = Architecture.I32;
+                    else if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "cpuCount") && machine.getFirstChild().getNodeValue() != null ) {
+
+                        image.getTags().put("cpuCount", machine.getFirstChild().getNodeValue());
+                    }
+                    else if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "memoryMb") && machine.getFirstChild().getNodeValue() != null ) {
+                        image.getTags().put("memory", machine.getFirstChild().getNodeValue());
                     }
                 }
             }
-            else if( name.equals(nameSpaceString + "machineSpecification") ) {
-            	NodeList machineAttributes  = attribute.getChildNodes();
-            	for(int j=0;j<machineAttributes.getLength();j++ ){
-            		Node machine = machineAttributes.item(j);
-	            	if( machine.getNodeName().equals(nameSpaceString + "operatingSystem") ){
-		            	 NodeList osAttributes  = machine.getChildNodes();
-		            	 for(int k=0;k<osAttributes.getLength();k++ ){
-		            		 Node os = osAttributes.item(k);
-		            		 
-		            		 if(os.getNodeType() == Node.TEXT_NODE) continue;
-		            		 
-		            		 String osName = os.getNodeName();
-		                     
-		            		 String osValue = null ;
-		            		 
-		                     if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
-		                    	 osValue = os.getFirstChild().getNodeValue();
-		                     }
-		                     else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-			                     platform = Platform.guess(os.getFirstChild().getNodeValue());
-		                     }
-		                     else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
-		                    	 
-		                    	 tags.put("cpuCount", os.getFirstChild().getNodeValue());
-		                     }  
-		                     else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-		                    	 tags.put("memory", os.getFirstChild().getNodeValue());
-		                     }
-		                     
-		                     if( osValue != null ) {
-		                    	 bestArchitectureGuess = guess(osValue);
-		            		 }		            		           		     		 
-		            	 }
-	            	}
-            	}             
-            }
             else if( name.equals(nameSpaceString + "operatingSystem") ) {
-            	
-           	 	NodeList osAttributes  = attribute.getChildNodes();
-           	 	
-           	 	for(int j=0;j<osAttributes.getLength();j++ ){
-           	 		
-           	 		Node os = osAttributes.item(j);
-           	 		         
-           	 		if(os.getNodeType() == Node.TEXT_NODE) continue;
-        		 
-	        		 String osName = os.getNodeName();              
-	                 
-	        		 String osValue = null ;
-	        		 
-	                 if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
-	                	 osValue = os.getFirstChild().getNodeValue();
-	                 }
-	                 else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-	                     platform = Platform.guess(os.getFirstChild().getNodeValue());
-	                 }
-	                 else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
-	                	 tags.put("cpuCount", os.getFirstChild().getNodeValue());
-	                 }  
-	                 else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-	                	 tags.put("memory", os.getFirstChild().getNodeValue());
-	                 }
-	                 	                           	
-	           		 if( osValue != null  ) {
-	                      bestArchitectureGuess = guess(osValue);
-	           		 }
-	           		 
-	           		 if( osValue != null ) {	           			 
-	           			 platform = Platform.guess(osValue);
-	           		 }           		 
-           	 	}            	
-            
-           }
-           else if(name.equals(nameSpaceString + "location") && value != null) {
-        	   if(!provider.getContext().getRegionId().equalsIgnoreCase(value)){
-        		  return null;  
-        	   }
-        	   regionId = value;
-        	   
-           }
-           else if( name.equals(nameSpaceString + "cpuCount") && value != null ) {
-        	
-        	   tags.put("cpuCount", value);
- 
-           }  
-           else if( name.equals(nameSpaceString + "memory") && value != null ) {
-        	   tags.put("memory", value);
-           } 
-           else if( name.equals("created") ) {
-               // 2010-06-29T20:49:28+1000
-               // TODO: implement when dasein cloud supports template creation timestamps
+                NodeList osAttributes  = attribute.getChildNodes();
 
-           }
-           else if( name.equals(nameSpaceString + "osStorage") ) {
-              // TODO
-           }
-           else if( name.equals(nameSpaceString + "location") ) {
-            	regionId = value;
-           }           
-           else if( name.equals(nameSpaceString + "deployedTime") ) {
+                for(int j=0;j<osAttributes.getLength();j++ ){
+                    Node os = osAttributes.item(j);
+
+                    if(os.getNodeType() == Node.TEXT_NODE) continue;
+                    String osName = os.getNodeName();
+                    String osValue = null;
+
+                    if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
+                        osValue = os.getFirstChild().getNodeValue();
+                    }
+                    else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
+                        image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));
+                    }
+
+                    if( osValue != null  ) {
+                        bestArchitectureGuess = guess(osValue);
+                    }
+
+                    if( osValue != null ) {
+                        image.setPlatform(Platform.guess(osValue));
+                    }
+                }
+            }
+            else if( name.equals(nameSpaceString + "location") && value != null) {
+                if(!provider.getContext().getRegionId().equalsIgnoreCase(value)){
+                    return null;
+                }
+                image.setProviderRegionId(value);
+
+            }
+            else if(name.equals(nameSpaceString + "cpuCount") && value != null ) {
+                image.getTags().put("cpuCount", value);
+            }
+            else if( name.equals(nameSpaceString + "memoryMb") && value != null ) {
+                image.getTags().put("memory", value);
+            }
+            else if( name.equals("created") ) {
                 // 2010-06-29T20:49:28+1000
                 // TODO: implement when dasein cloud supports template creation timestamps
-           }else if( name.equals(nameSpaceString + "sourceServerId") ) {
-            	//TODO
-           }else if( name.equals(nameSpaceString + "softwareLabel") ) {
-            	software = value;
-           }
-            
-        }
-        if( imageId == null || !regionId.equals(provider.getContext().getRegionId()) ) {
-            return null;
-        }
-        if( imageName == null || imageName.equals("") ) {
-            imageName = imageId;
-        }
-        if( description == null || description.equals("") ) {
-            description = imageName;
-        }
-        if( platform == null || platform.equals(Platform.UNKNOWN) ) {
-            platform = Platform.guess(imageName + " " + description);
-        }
-        if( platform.equals(Platform.UNKNOWN) ) {
-        	if( imageName.contains("Win2008") || imageName.contains("Win2003")){
-        		platform = Platform.WINDOWS;
-        	}        	
-        }
-        if( bestArchitectureGuess == null ) {
-            bestArchitectureGuess = Architecture.I64;
-        }
-        MachineImage image = MachineImage.getMachineImageInstance(ownerId, regionId, imageId, currentState, imageName,  description, bestArchitectureGuess, platform).createdAt(created);
+            }
+            else if( name.equals(nameSpaceString + "osStorage") ) {
+                // TODO
+            }
+            else if( name.equals(nameSpaceString + "location") ) {
+                image.setProviderRegionId(value);
+            }
+            else if( name.equals(nameSpaceString + "deployedTime") ) {
+                // 2010-06-29T20:49:28+1000
+                // TODO: implement when dasein cloud supports template creation timestamps
+            }else if( name.equals(nameSpaceString + "sourceServerId") ) {
+                //TODO
+            }else if( name.equals(nameSpaceString + "softwareLabel") ) {
+                image.setSoftware(value);
+            }
 
-        image.withSoftware(guessSoftware(image));
-        image.setTags(tags);
-        return image;       
+        }
+        if(image.getDescription() == null || image.getDescription().equals("")){
+            image.setDescription(image.getName());
+        }
+        if( image.getPlatform() == null && image.getName() != null ) {
+            image.setPlatform(Platform.guess(image.getName()));
+        }
+        if( image.getPlatform().equals(Platform.UNKNOWN) && image.getDescription()!= null ) {
+            image.setPlatform(Platform.guess(image.getDescription()));
+        }
+        if(image.getPlatform().equals(Platform.UNKNOWN)){
+            if(image.getName().contains("Win2008") || image.getName().contains("Win2003")){
+                image.setPlatform(Platform.WINDOWS);
+            }
+        }
+        if( image.getArchitecture() == null ) {
+            image.setArchitecture(bestArchitectureGuess);
+        }
+        if( image.getSoftware() == null ) {
+            guessSoftware(image);
+        }
+        return image;
     }
 }
