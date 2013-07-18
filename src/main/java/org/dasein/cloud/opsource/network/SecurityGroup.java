@@ -36,6 +36,10 @@ import org.dasein.cloud.opsource.CallCache;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
+import org.dasein.util.uom.time.Minute;
+import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -43,11 +47,6 @@ import org.w3c.dom.NodeList;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
 
 /**
  * There is no concept of firewall group in OpSource,
@@ -526,6 +525,43 @@ public class SecurityGroup implements FirewallSupport {
 
     @Override
     public Collection<Firewall> list() throws InternalException, CloudException {
+        /*Cache<Firewall> firewallCache = Cache.getInstance(provider, "firewall", Firewall.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Minute>(5, TimePeriod.MINUTE));
+        ArrayList<Firewall> firewalls = (ArrayList<Firewall>)firewallCache.get(provider.getContext());
+        if(firewalls == null){
+            firewalls = new ArrayList<Firewall>();
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param("networkWithLocation", null);
+            parameters.put(0, param);
+
+            param = new Param(provider.getDefaultRegionId(), null);
+            parameters.put(1, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+            Document doc = method.invoke();
+            //Document doc = CallCache.getInstance().getAPICall("networkWithLocation", provider, parameters);
+
+            String sNS = "";
+            try{
+                sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            NodeList matches = doc.getElementsByTagName(sNS + "network");
+            if(matches != null){
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+                    Firewall firewall = toFirewall(node);
+                    if( firewall != null ) {
+                        firewalls.add(firewall);
+                    }
+                }
+            }
+        }
+        firewallCache.put(provider.getContext(), firewalls);
+        return firewalls;
+        */
+
       	//List the network information
     	ArrayList<Firewall> list = new ArrayList<Firewall>();
         HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
@@ -562,7 +598,13 @@ public class SecurityGroup implements FirewallSupport {
     @Nonnull
     @Override
     public Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
-        return null;  //TODO: Implement for 2013.01
+        Collection<Firewall> firewalls = list();
+
+        ArrayList<ResourceStatus> statuses = new ArrayList<ResourceStatus>();
+        for(Firewall firewall : firewalls){
+            statuses.add(new ResourceStatus(firewall.getProviderFirewallId(), true));
+        }
+        return statuses;
     }
 
     @Nonnull
@@ -639,6 +681,7 @@ public class SecurityGroup implements FirewallSupport {
         param = new Param("aclrule", null);
         parameters.put(2, param);
 
+        if(firewallRuleId.indexOf(":") > 0)firewallRuleId = firewallRuleId.substring(0, firewallRuleId.indexOf(":"));
         param = new Param(firewallRuleId, null);
         parameters.put(3, param);
 
