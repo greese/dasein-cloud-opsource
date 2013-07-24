@@ -1,7 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  
 <!--
-    Copyright (C) 2010 enStratus Networks LLC (http://www.enstratus.com)
+    Copyright (C) 2008-2013 Dell, Inc. (http://www.enstratius.com)
 
     ====================================================================
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +20,7 @@
 
   <groupId>org.dasein</groupId>
   <artifactId>dasein-cloud-opsource</artifactId>
-  <version>2013.04-SNAPSHOT</version>
+  <version>2013.07-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>dasein-cloud-opsource</name>
@@ -38,11 +37,11 @@
         <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
     </license>
   </licenses>
-  
-  <organization>
-    <name>enStratus Networks Inc</name>
-    <url>http://www.enstratus.com</url>
-  </organization>
+
+    <organization>
+        <name>Dell, Inc.</name>
+        <url>http://software.dell.com</url>
+    </organization>
 
     <scm>
         <connection>scm:git:git://github.com/greese/dasein-cloud-opsource.git</connection>
@@ -61,7 +60,7 @@
       <dependency>
           <groupId>org.dasein</groupId>
           <artifactId>dasein-cloud-core</artifactId>
-          <version>2013.04-SNAPSHOT</version>
+          <version>2013.07-SNAPSHOT</version>
           <type>jar</type>
           <scope>compile</scope>
       </dependency>
@@ -87,174 +86,171 @@
     	<scope>compile</scope>
     </dependency>
 
-    <!-- Test -->
-    <dependency>
-    	<groupId>org.dasein</groupId>
-    	<artifactId>dasein-cloud-test</artifactId>
-    	<version>2013.04-SNAPSHOT</version>
-    	<type>jar</type>
-    	<scope>test</scope>
-    </dependency>
+      <!-- Test -->
+      <dependency>
+          <groupId>org.dasein</groupId>
+          <artifactId>dasein-cloud-test</artifactId>
+          <version>2013.07-SNAPSHOT</version>
+          <scope>test</scope>
+          <optional>false</optional>
+      </dependency>
       <dependency>
           <groupId>junit</groupId>
           <artifactId>junit</artifactId>
           <version>4.9</version>
-          <type>jar</type>
           <scope>test</scope>
       </dependency>
   </dependencies>
 
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>2.0.2</version>
-        <configuration>
-          <source>1.6</source>
-          <target>1.6</target>
-        </configuration>
-      </plugin>  
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-javadoc-plugin</artifactId>
-          <version>2.7</version>
-          <executions>
-              <execution>
-                  <id>javadoc</id>
-                  <phase>package</phase>
-                  <goals>
-                      <goal>jar</goal>
-                  </goals>
-              </execution>
-          </executions>                
-          <configuration>
-              <encoding>utf-8</encoding>
-              <quiet>true</quiet>
-              <links>
-                  <link>http://java.sun.com/javase/6/docs/api/</link>
-                  <link>http://www.dasein.org/api/dasein-cloud/</link>
-                  <link>http://www.dasein.org/api/dasein-utils/</link>
-              </links>
-              <stylesheetfile>dasein-javadoc.css</stylesheetfile>
-              <footer />
-          </configuration>
-        </plugin>
-        <plugin>
-            <groupId>com.mycila.maven-license-plugin</groupId>
-            <artifactId>maven-license-plugin</artifactId>
-            <version>1.8.0</version>
-            <configuration>
-                <strictCheck>true</strictCheck>
-                <encoding>utf-8</encoding>
-                <aggregate>true</aggregate>
-                <header>src/main/etc/header.txt</header>
-                <excludes>
-                    <exclude>thirdparty/**</exclude>
-                    <exclude>**/src/**/resources/**</exclude>
-                    <exclude>**/LICENSE-APACHE.txt</exclude>
-                </excludes>
-                <properties>
-                    <year>2011-2012</year>
-                    <copyrightHolder>enStratus Networks Inc</copyrightHolder>
-                </properties>
-            </configuration>
-        </plugin>
-        <plugin>
-             <groupId>org.apache.maven.plugins</groupId>
-             <artifactId>maven-source-plugin</artifactId>
-             <version>2.1.2</version>
-              <executions>
-                  <execution>
-                      <id>source</id>
-                      <phase>package</phase>
-                      <goals>
-                          <goal>jar-no-fork</goal>
-                      </goals>
-                  </execution>
-              </executions> 
-        </plugin>     
-        <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-release-plugin</artifactId>
-            <version>2.1</version>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.6</version>
-        <configuration>
-            <systemProperties>  
-                <property>
-                    <name>endpoint</name>
-                    <value>${endpoint}</value>
-                </property>
-                <property>
-                    <name>accountNumber</name>
-                    <value>${accountNumber}</value>
-                </property>
-                <property>
-                    <name>apiSharedKey</name>
-                    <value>${apiSharedKey}</value>
-                </property>
-                <property>
-                    <name>apiSecretKey</name>
-                    <value>${apiSecretKey}</value>
-                </property>
-                <property>
-                    <name>cloudName</name>
-                    <value>${cloudName}</value>
-                </property>
-                <property>
-                    <name>providerName</name>
-                    <value>${providerName}</value>
-                </property>
-                <property>
-                    <name>regionId</name>
-                    <value>${regionId}</value>
-                </property>
-                <property>
-                    <name>test.region</name>
-                    <value>${test.region}</value>
-                </property>
-                <property>
-                    <name>test.dataCenter</name>
-                    <value>${test.dataCenter}</value>
-                </property>
-                <property>
-                    <name>test.machineImage</name>
-                    <value>${test.machineImage}</value>
-                </property>
-                <property>
-                    <name>test.product</name>
-                    <value>${test.product}</value>
-                </property>
-                <property>
-                    <name>test.firewall</name>
-                    <value>${test.firewall}</value>
-                </property>              
-            </systemProperties> 
-          <includes>
-            <!-- <include>**/OpSourceTestSuite.java</include> -->
-          </includes>
-        </configuration>
-      </plugin>   
-      <plugin>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/lib</outputDirectory>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>          
-    </plugins>
-  </build>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>2.0.2</version>
+                <configuration>
+                    <source>1.6</source>
+                    <target>1.6</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>2.7</version>
+                <executions>
+                    <execution>
+                        <id>javadoc</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <encoding>utf-8</encoding>
+                    <quiet>true</quiet>
+                    <links>
+                        <link>http://java.sun.com/javase/6/docs/api/</link>
+                        <link>http://java.sun.com/javaee/6/docs/api/</link>
+                    </links>
+                    <stylesheetfile>dasein-javadoc.css</stylesheetfile>
+                    <footer />
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.mycila.maven-license-plugin</groupId>
+                <artifactId>maven-license-plugin</artifactId>
+                <version>1.8.0</version>
+                <configuration>
+                    <strictCheck>true</strictCheck>
+                    <encoding>utf-8</encoding>
+                    <aggregate>true</aggregate>
+                    <header>src/main/etc/header.txt</header>
+                    <mapping>
+                        <clj>SEMICOLON_STYLE</clj>
+                    </mapping>
+                    <excludes>
+                        <exclude>thirdparty/**</exclude>
+                        <exclude>**/src/**/resources/**</exclude>
+                        <exclude>**/LICENSE-APACHE.txt</exclude>
+                    </excludes>
+                    <properties>
+                        <year>2009-2013</year>
+                        <copyrightHolder>Dell, Inc.</copyrightHolder>
+                    </properties>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>2.1.2</version>
+                <executions>
+                    <execution>
+                        <id>source</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>2.1</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.6</version>
+                <configuration>
+                    <systemProperties>
+                        <property>
+                            <name>providerClass</name>
+                            <value>${providerClass}</value>
+                        </property>
+                        <property>
+                            <name>endpoint</name>
+                            <value>${endpoint}</value>
+                        </property>
+                        <property>
+                            <name>accountNumber</name>
+                            <value>${accountNumber}</value>
+                        </property>
+                        <property>
+                            <name>accessPublic</name>
+                            <value>${apiSharedKey}</value>
+                        </property>
+                        <property>
+                            <name>accessPrivate</name>
+                            <value>${apiSecretKey}</value>
+                        </property>
+                        <property>
+                            <name>x509Cert</name>
+                            <value>${x509Cert}</value>
+                        </property>
+                        <property>
+                            <name>x509Key</name>
+                            <value>${x509Key}</value>
+                        </property>
+                        <property>
+                            <name>cloudName</name>
+                            <value>${cloudName}</value>
+                        </property>
+                        <property>
+                            <name>providerName</name>
+                            <value>${providerName}</value>
+                        </property>
+                        <property>
+                            <name>regionId</name>
+                            <value>${regionId}</value>
+                        </property>
+                        <property>
+                            <name>shareAccount</name>
+                            <value>${test.shareAccount}</value>
+                        </property>
+                    </systemProperties>
+                    <includes>
+                        <include>**/OpSourceTestSuite.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
   
   <distributionManagement>
     <repository>

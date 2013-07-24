@@ -298,25 +298,29 @@ public class OpSourceMethod {
         		else{
                     if(responseBody != null){
                         parseError(status, responseBody);
-                        Document parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
-                        if(wire.isDebugEnabled()){
-                            try{
-                                TransformerFactory transfac = TransformerFactory.newInstance();
-                                Transformer trans = transfac.newTransformer();
-                                trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-                                trans.setOutputProperty(OutputKeys.INDENT, "yes");
+                        Document parsedError = null;
+                        if(!responseBody.contains("<HR")){
+                            parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
+                            if(wire.isDebugEnabled()){
+                                try{
+                                    TransformerFactory transfac = TransformerFactory.newInstance();
+                                    Transformer trans = transfac.newTransformer();
+                                    trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                                    trans.setOutputProperty(OutputKeys.INDENT, "yes");
 
-                                StringWriter sw = new StringWriter();
-                                StreamResult result = new StreamResult(sw);
-                                DOMSource source = new DOMSource(parsedError);
-                                trans.transform(source, result);
-                                String xmlString = sw.toString();
-                                wire.debug(xmlString);
-                            }
-                            catch(Exception ex){
-                                ex.printStackTrace();
+                                    StringWriter sw = new StringWriter();
+                                    StreamResult result = new StreamResult(sw);
+                                    DOMSource source = new DOMSource(parsedError);
+                                    trans.transform(source, result);
+                                    String xmlString = sw.toString();
+                                    wire.debug(xmlString);
+                                }
+                                catch(Exception ex){
+                                    ex.printStackTrace();
+                                }
                             }
                         }
+                        else logger.debug("Error message was unparsable");
                         return parsedError;
                     }
         		}
@@ -550,7 +554,7 @@ public class OpSourceMethod {
                 try{
                     errorMessage = URLDecoder.decode(ignore.getMessage(), "UTF-8");
                 }
-                catch(Exception ex){ex.printStackTrace();}
+                catch(Exception ex){}
                 logger.warn("parseError(): Error was unparsable: " + errorMessage);
                 if( error.message == null ) {
                     error.message = assumedXml;

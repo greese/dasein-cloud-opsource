@@ -19,7 +19,6 @@
 package org.dasein.cloud.opsource.compute;
 
 
-import java.io.StringWriter;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -27,11 +26,6 @@ import java.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
@@ -60,7 +54,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class VirtualMachines extends AbstractVMSupport {
+public class VirtualMachines extends AbstractVMSupport<OpSource> {
     static public final Logger logger = OpSource.getLogger(VirtualMachines.class);
 
     static private final String DESTROY_VIRTUAL_MACHINE = "delete";
@@ -1411,6 +1405,11 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     @Override
+    public void terminate(@Nonnull String instanceId, @Nullable String explanation) throws InternalException, CloudException {
+        terminate(instanceId);
+    }
+
+    @Override
     public void unpause(@Nonnull String vmId) throws CloudException, InternalException {
         throw new OperationNotSupportedException("Pause/unpause is not supported");
     }
@@ -1661,7 +1660,6 @@ public class VirtualMachines extends AbstractVMSupport {
             product.setDescription(cpuCout + " CPU/" + memoryInMb + "MB RAM/" + diskInGb + "GB HD");*/
 
             server.setProductId(cpuCount + ":" + memoryInMb + ":" + diskString);
-            System.out.println("Server product String: " + server.getProductId());
         }
         if(server.getCurrentState().equals(VmState.SUSPENDED) && !failureReason.equals("")){
             server.setTag("serverState", serverState);

@@ -35,15 +35,7 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.IPVersion;
-import org.dasein.cloud.network.LbAlgorithm;
-import org.dasein.cloud.network.LbListener;
-import org.dasein.cloud.network.LbProtocol;
-import org.dasein.cloud.network.LoadBalancer;
-import org.dasein.cloud.network.LoadBalancerAddressType;
-import org.dasein.cloud.network.LoadBalancerServer;
-import org.dasein.cloud.network.LoadBalancerSupport;
-import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.network.*;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
@@ -54,7 +46,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class LoadBalancers implements LoadBalancerSupport { 
+public class LoadBalancers extends AbstractLoadBalancerSupport<OpSource> {
 	static public final String ASSIGN_TO_LOAD_BALANCER_RULE       = "assignToLoadBalancerRule";
 	static public final String CREATE_LOAD_BALANCER_RULE          = "createLoadBalancerRule";
 	static public final String DELETE_LOAD_BALANCER_RULE          = "deleteLoadBalancerRule";
@@ -62,9 +54,10 @@ public class LoadBalancers implements LoadBalancerSupport {
 	static public final String LIST_LOAD_BALANCER_RULE_INSTANCES  = "listLoadBalancerRuleInstances";
 	static public final String REMOVE_FROM_LOAD_BALANCER_RULE     = "removeFromLoadBalancerRule";
 	static private final Logger logger = Logger.getLogger(LoadBalancers.class);
-	private OpSource provider;
+	private OpSource provider = null;
 
 	LoadBalancers(OpSource provider) {
+        super(provider);
 		this.provider = provider;
 	}
 
@@ -514,6 +507,7 @@ serverFarm/{server-farm-id}/addRealServer
 	 * LB in opsource can only be created when the VMs, ip address for the LB are within the same VLAN
 	 * https://<Cloud API URL>/oec/0.9/{org-id}/network/{network-id}/vip
 	 */
+    @Deprecated
 	@Override
 	public String create(String name, String description, String addressId, String[] dcIds, LbListener[] listeners, String[] servers) throws CloudException, InternalException {
         APITrace.begin(provider, "LB.create");
@@ -895,11 +889,13 @@ serverFarm/{server-farm-id}
         }
 	}
 
+    @Deprecated
     @Override
     public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId) throws CloudException, InternalException {
         return Collections.emptyList(); // todo: implement me
     }
 
+    @Deprecated
     @Override
     public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId, String... serverIdsToCheck) throws CloudException, InternalException {
         return Collections.emptyList(); //todo implement me
@@ -1112,16 +1108,6 @@ serverFarm/{server-farm-id}
 	@Override
 	public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
 		return new String[0];
-	}
-
-	@Override
-	public boolean requiresListenerOnCreate() throws CloudException, InternalException {
-		return true;
-	}
-
-	@Override
-	public boolean requiresServerOnCreate() throws CloudException, InternalException {
-		return true;
 	}
 
 	@Override
@@ -1459,7 +1445,7 @@ serverFarm/{server-farm-id}
 		method.requestResult("Delete server Farm", method.invoke(), "result", "resultDetail");
 	}
 
-
+    @Deprecated
 	@Override
 	public void remove(String loadBalancerId) throws CloudException, InternalException {
         APITrace.begin(provider, "LB.remove");
