@@ -509,6 +509,39 @@ public class OpSourceMethod {
     	}
 		return false;		
 	}
+
+    public boolean parseRequestResultNoError(String action, Document doc, String resultTag, String resultDetailTag) throws CloudException, InternalException{
+        if( wire.isDebugEnabled() ) {
+            wire.debug(provider.convertDomToString(doc));
+        }
+
+        String sNS = "";
+        try{
+            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+        }
+        catch(IndexOutOfBoundsException ex){}
+        NodeList blocks = doc.getElementsByTagName(sNS + resultTag);
+        if(blocks != null){
+            for(int i=0;i< blocks.getLength();i++){
+                Node attr = blocks.item(i);
+                if(attr.getFirstChild().getNodeValue().equals(OpSource.RESPONSE_RESULT_SUCCESS_VALUE)){
+                    return true;
+                }
+                if(attr.getFirstChild().getNodeValue().equals(OpSource.RESPONSE_RESULT_ERROR_VALUE)){
+                    blocks = doc.getElementsByTagName(sNS + resultDetailTag);
+                    if(blocks == null){
+                        logger.error(action + " fails " + "without explaination !!!");
+                        throw new CloudException(action + " fails " + "without explaination !!!");
+
+                    }else{
+                        logger.trace(blocks.item(0).getFirstChild().getNodeValue());
+                        throw new CloudException(blocks.item(0).getFirstChild().getNodeValue());
+                    }
+                }
+            }
+        }
+        return false;
+    }
 	
 	private ParsedError parseError(int httpStatus, String assumedXml) throws InternalException {
 		if( logger.isTraceEnabled() ) {
