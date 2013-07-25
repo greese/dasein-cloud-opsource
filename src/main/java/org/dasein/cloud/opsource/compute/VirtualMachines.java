@@ -1231,7 +1231,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         OpSourceMethod method = new OpSourceMethod(provider,
                 provider.buildUrl(null,true, parameters),
                 provider.getBasicRequestParameters(OpSource.Content_Type_Value_Modify, "POST", requestBody));
-        return method.parseRequestResult("Modify vm",method.invoke(), "result", "resultDetail");
+        return method.parseRequestResultNoResult("Modify vm",method.invoke(), "result", "resultDetail");
     }
 
     @Override
