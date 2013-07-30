@@ -1535,7 +1535,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         String serverState = "";
         String failureReason = "";
         //ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
-        HashMap<String, String> attachedDisks = new HashMap<String, String>();
+        TreeMap<String, String> attachedDisks = new TreeMap<String, String>();
 
         for(int i=0; i<attributes.getLength(); i++){
             Node attribute = attributes.item(i);
@@ -1701,9 +1701,9 @@ public class VirtualMachines implements VirtualMachineSupport {
             int cpuCount = Integer.valueOf((String) server.getTag("cpuCount"));
             int memoryInMb = Integer.valueOf((String) server.getTag("memory"));
             String diskString = "[";
-            for(int i=0;i<attachedDisks.size();i++){
-                String diskSize = attachedDisks.get(i+"");
-                //int diskSize = attachedDisks.get(i);
+            Iterator<String> diskIt = attachedDisks.keySet().iterator();
+            while(diskIt.hasNext()){
+                String diskSize = attachedDisks.get(diskIt.next());
                 diskString += diskSize + ",";
             }
             diskString = diskString.substring(0, diskString.length()-1) + "]";
