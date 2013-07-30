@@ -295,26 +295,30 @@ public class OpSourceMethod {
                 }
         		else{
                     if(responseBody != null){
-                        parseError(status, responseBody);
-                        Document parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
-                        if(wire.isDebugEnabled()){
-                            try{
-                                TransformerFactory transfac = TransformerFactory.newInstance();
-                                Transformer trans = transfac.newTransformer();
-                                trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-                                trans.setOutputProperty(OutputKeys.INDENT, "yes");
+                        Document parsedError = null;
+                        if(!responseBody.contains("<HR")){
+                            parseError(status, responseBody);
+                            parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
+                            if(wire.isDebugEnabled()){
+                                try{
+                                    TransformerFactory transfac = TransformerFactory.newInstance();
+                                    Transformer trans = transfac.newTransformer();
+                                    trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                                    trans.setOutputProperty(OutputKeys.INDENT, "yes");
 
-                                StringWriter sw = new StringWriter();
-                                StreamResult result = new StreamResult(sw);
-                                DOMSource source = new DOMSource(parsedError);
-                                trans.transform(source, result);
-                                String xmlString = sw.toString();
-                                wire.debug(xmlString);
-                            }
-                            catch(Exception ex){
-                                ex.printStackTrace();
+                                    StringWriter sw = new StringWriter();
+                                    StreamResult result = new StreamResult(sw);
+                                    DOMSource source = new DOMSource(parsedError);
+                                    trans.transform(source, result);
+                                    String xmlString = sw.toString();
+                                    wire.debug(xmlString);
+                                }
+                                catch(Exception ex){
+                                    ex.printStackTrace();
+                                }
                             }
                         }
+                        else logger.trace("Unparsable error");
                         return parsedError;
                     }
         		}
@@ -503,6 +507,39 @@ public class OpSourceMethod {
     	}
 		return false;		
 	}
+
+    public boolean parseRequestResultNoResult(String action, Document doc, String resultTag, String resultDetailTag) throws CloudException, InternalException{
+        if( wire.isDebugEnabled() ) {
+            wire.debug(provider.convertDomToString(doc));
+        }
+
+        String sNS = "";
+        try{
+            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+        }
+        catch(IndexOutOfBoundsException ex){}
+        NodeList blocks = doc.getElementsByTagName(sNS + resultTag);
+        if(blocks != null){
+            for(int i=0;i< blocks.getLength();i++){
+                Node attr = blocks.item(i);
+                if(attr.getFirstChild().getNodeValue().equals(OpSource.RESPONSE_RESULT_SUCCESS_VALUE)){
+                    return true;
+                }
+                if(attr.getFirstChild().getNodeValue().equals(OpSource.RESPONSE_RESULT_ERROR_VALUE)){
+                    blocks = doc.getElementsByTagName(sNS + resultDetailTag);
+                    if(blocks == null){
+                        logger.error(action + " fails " + "without explaination !!!");
+                        throw new CloudException(action + " fails " + "without explaination !!!");
+
+                    }else{
+                        logger.error(blocks.item(0).getFirstChild().getNodeValue());
+                        throw new CloudException(blocks.item(0).getFirstChild().getNodeValue());
+                    }
+                }
+            }
+        }
+        return false;
+    }
 	
 	private ParsedError parseError(int httpStatus, String assumedXml) throws InternalException {
 		if( logger.isTraceEnabled() ) {
