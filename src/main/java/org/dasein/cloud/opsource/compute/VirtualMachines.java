@@ -1176,7 +1176,7 @@ public class VirtualMachines extends AbstractVMSupport<OpSource> {
             OpSourceMethod method = new OpSourceMethod(provider,
                     provider.buildUrl(null,true, parameters),
                     provider.getBasicRequestParameters(OpSource.Content_Type_Value_Modify, "POST", requestBody));
-            return method.parseRequestResult("Modify vm",method.invoke(), "result", "resultDetail");
+            return method.parseRequestResultNoError("Modify vm",method.invoke(), "result", "resultDetail");
         }
         finally {
             APITrace.end();
@@ -1478,7 +1478,7 @@ public class VirtualMachines extends AbstractVMSupport<OpSource> {
         String serverState = "";
         String failureReason = "";
         //ArrayList<Integer> attachedDisks = new ArrayList<Integer>();
-        HashMap<String, String> attachedDisks = new HashMap<String, String>();
+        TreeMap<String, String> attachedDisks = new TreeMap<String, String>();
 
         for(int i=0; i<attributes.getLength(); i++){
             Node attribute = attributes.item(i);
@@ -1644,9 +1644,9 @@ public class VirtualMachines extends AbstractVMSupport<OpSource> {
             int cpuCount = Integer.valueOf((String) server.getTag("cpuCount"));
             int memoryInMb = Integer.valueOf((String) server.getTag("memory"));
             String diskString = "[";
-            for(int i=0;i<attachedDisks.size();i++){
-                String diskSize = attachedDisks.get(i+"");
-                //int diskSize = attachedDisks.get(i);
+            Iterator<String> diskIt = attachedDisks.keySet().iterator();
+            while(diskIt.hasNext()){
+                String diskSize = attachedDisks.get(diskIt.next());
                 diskString += diskSize + ",";
             }
             diskString = diskString.substring(0, diskString.length()-1) + "]";
