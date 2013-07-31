@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2012 enStratus Networks Inc
+ * Copyright (C) 2009-2013 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -72,6 +72,7 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -202,7 +203,7 @@ public class OpSourceMethod {
 	            }else{
 	            	throw new CloudException("The request body is null for a post request");
 	            }                
-            }           
+            }
 	        
 	        /** Now parse the xml */
 	        try {
@@ -215,6 +216,7 @@ public class OpSourceMethod {
                     }
                 }
                 /**  Now execute the request */
+                APITrace.trace(provider, method.toString() + " " + urlStr);
                 httpResponse = httpclient.execute((HttpUriRequest) method);
                 status = httpResponse.getStatusLine().getStatusCode();
                 if( wire.isDebugEnabled() ) {
@@ -242,6 +244,7 @@ public class OpSourceMethod {
                 }
 
                 String responseBody = EntityUtils.toString(entity);
+
         		if( status == HttpStatus.SC_OK ) {
                     InputStream input = null;
                     try {
@@ -292,43 +295,32 @@ public class OpSourceMethod {
                 else if(status == HttpStatus.SC_NOT_FOUND){
                     throw new CloudException("An internal error occured: The endpoint was not found");
                 }
-        		else{        			
-                    /*String resultXML = null;
-                    try {                    	
-                    	resultXML = EntityUtils.toString(entity);
-                    }
-                    catch( IOException e ) {
-                        logger.error("invoke(): Failed to read xml error due to a cloud I/O error: " + e.getMessage());
-                        if( logger.isTraceEnabled() ) {
-                            e.printStackTrace();
-                        }
-                        throw new CloudException(e);                    
-                    }
-                    if(resultXML != null){
-                    	parseError(status, resultXML);
-                        return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(resultXML);
-                    } */
+        		else{
                     if(responseBody != null){
                         parseError(status, responseBody);
-                        Document parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
-                        if(wire.isDebugEnabled()){
-                            try{
-                                TransformerFactory transfac = TransformerFactory.newInstance();
-                                Transformer trans = transfac.newTransformer();
-                                trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-                                trans.setOutputProperty(OutputKeys.INDENT, "yes");
+                        Document parsedError = null;
+                        if(!responseBody.contains("<HR")){
+                            parsedError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(responseBody.getBytes("UTF-8")));
+                            if(wire.isDebugEnabled()){
+                                try{
+                                    TransformerFactory transfac = TransformerFactory.newInstance();
+                                    Transformer trans = transfac.newTransformer();
+                                    trans.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                                    trans.setOutputProperty(OutputKeys.INDENT, "yes");
 
-                                StringWriter sw = new StringWriter();
-                                StreamResult result = new StreamResult(sw);
-                                DOMSource source = new DOMSource(parsedError);
-                                trans.transform(source, result);
-                                String xmlString = sw.toString();
-                                wire.debug(xmlString);
-                            }
-                            catch(Exception ex){
-                                ex.printStackTrace();
+                                    StringWriter sw = new StringWriter();
+                                    StreamResult result = new StreamResult(sw);
+                                    DOMSource source = new DOMSource(parsedError);
+                                    trans.transform(source, result);
+                                    String xmlString = sw.toString();
+                                    wire.debug(xmlString);
+                                }
+                                catch(Exception ex){
+                                    ex.printStackTrace();
+                                }
                             }
                         }
+                        else logger.debug("Error message was unparsable");
                         return parsedError;
                     }
         		}
@@ -426,15 +418,6 @@ public class OpSourceMethod {
         catch(IndexOutOfBoundsException ex){}
     	NodeList blocks = doc.getElementsByTagName(sNS + resultTag);
 
-        try{
-            StringWriter stw = new StringWriter();
-            Transformer serializer = TransformerFactory.newInstance().newTransformer();
-            serializer.transform(new DOMSource(doc), new StreamResult(stw));
-        }
-        catch(Exception ex){
-            ex.printStackTrace();
-        }
-
     	if(blocks != null){
     		for(int i=0;i< blocks.getLength();i++){
     			Node attr = blocks.item(i);
@@ -526,6 +509,39 @@ public class OpSourceMethod {
     	}
 		return false;		
 	}
+
+    public boolean parseRequestResultNoError(String action, Document doc, String resultTag, String resultDetailTag) throws CloudException, InternalException{
+        if( wire.isDebugEnabled() ) {
+            wire.debug(provider.convertDomToString(doc));
+        }
+
+        String sNS = "";
+        try{
+            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+        }
+        catch(IndexOutOfBoundsException ex){}
+        NodeList blocks = doc.getElementsByTagName(sNS + resultTag);
+        if(blocks != null){
+            for(int i=0;i< blocks.getLength();i++){
+                Node attr = blocks.item(i);
+                if(attr.getFirstChild().getNodeValue().equals(OpSource.RESPONSE_RESULT_SUCCESS_VALUE)){
+                    return true;
+                }
+                if(attr.getFirstChild().getNodeValue().equals(OpSource.RESPONSE_RESULT_ERROR_VALUE)){
+                    blocks = doc.getElementsByTagName(sNS + resultDetailTag);
+                    if(blocks == null){
+                        logger.error(action + " fails " + "without explaination !!!");
+                        throw new CloudException(action + " fails " + "without explaination !!!");
+
+                    }else{
+                        logger.trace(blocks.item(0).getFirstChild().getNodeValue());
+                        throw new CloudException(blocks.item(0).getFirstChild().getNodeValue());
+                    }
+                }
+            }
+        }
+        return false;
+    }
 	
 	private ParsedError parseError(int httpStatus, String assumedXml) throws InternalException {
 		if( logger.isTraceEnabled() ) {
@@ -571,7 +587,7 @@ public class OpSourceMethod {
                 try{
                     errorMessage = URLDecoder.decode(ignore.getMessage(), "UTF-8");
                 }
-                catch(Exception ex){ex.printStackTrace();}
+                catch(Exception ex){}
                 logger.warn("parseError(): Error was unparsable: " + errorMessage);
                 if( error.message == null ) {
                     error.message = assumedXml;
@@ -620,16 +636,19 @@ public class OpSourceMethod {
 	            //return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(input);
 
                 Document parseForError = null;
-                parseForError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-                return parseForError;
+                if(!xml.contains("<HR")){
+                    parseForError = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+                    return parseForError;
+                }
+                throw new InternalException("Unparsable error: " + xml);
 	    	}
-	        catch( IOException e ) {
+	        catch(IOException e) {
 	        	throw new CloudException(e);
 	        }
-            catch( ParserConfigurationException e ) {
+            catch(ParserConfigurationException e) {
                 throw new CloudException(e);
             }
-            catch( SAXException e ) {
+            catch(SAXException e) {
                 throw new CloudException("Received error code from server [" + code + "]: " + xml);
             }
         }

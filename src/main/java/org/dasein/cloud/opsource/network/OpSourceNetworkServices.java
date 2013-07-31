@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2012 enStratus Networks Inc
+ * Copyright (C) 2009-2013 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ public class OpSourceNetworkServices extends AbstractNetworkServices {
     public OpSourceNetworkServices(@Nonnull OpSource cloud) { this.cloud = cloud; }
     
     @Override 
-    public @Nullable SecurityGroup getFirewallSupport() {
+    public @Nonnull SecurityGroup getFirewallSupport() {
        return new SecurityGroup(cloud);      
     }
     
@@ -46,7 +46,7 @@ public class OpSourceNetworkServices extends AbstractNetworkServices {
     }
     
     @Override
-    public @Nullable Network getVlanSupport() {
+    public @Nonnull Network getVlanSupport() {
     	return new Network(cloud);      
     }
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2012 enStratus Networks Inc
+ * Copyright (C) 2009-2013 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -162,12 +162,14 @@ public class PublicIPPool {
                         ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
 
                         //Attempt to mark assigned IPs
-                        ArrayList<String> assignedIPs = null;
+                        ArrayList<String> assignedIPs = new ArrayList<String>();
                         try{
                             ArrayList<NatRule> rules = (ArrayList<NatRule>)listNatRules(providerVlanId);
                             for(NatRule rule : rules){
                                 for(IpAddress ip : ips){
-                                    if(rule.getNatIp().equals(ip.getRawAddress().getIpAddress()))assignedIPs.add(rule.getNatIp());
+                                    if(rule.getNatIp().equals(ip.getRawAddress().getIpAddress())){
+                                        assignedIPs.add(rule.getNatIp());
+                                    }
                                 }
                             }
                         }
@@ -248,12 +250,14 @@ public class PublicIPPool {
                         if(requiredBlock){
                             ArrayList<IpAddress> ips = getIPs(currentBaseIp, currentBlockSize);
                             //Attempt to mark assigned IPs
-                            ArrayList<String> assignedIPs = null;
+                            ArrayList<String> assignedIPs = new ArrayList<String>();
                             try{
                                 ArrayList<NatRule> rules = (ArrayList<NatRule>)listNatRules(providerVlanId);
                                 for(NatRule rule : rules){
                                     for(IpAddress ip : ips){
-                                        if(rule.getNatIp().equals(ip.getRawAddress().getIpAddress()))assignedIPs.add(rule.getNatIp());
+                                        if(rule.getNatIp().equals(ip.getRawAddress().getIpAddress())){
+                                            assignedIPs.add(rule.getNatIp());
+                                        }
                                     }
                                 }
                             }
@@ -463,6 +467,7 @@ public class PublicIPPool {
             this.vlanId = vlanId;
             this.addresses = addresses;
             this.networkDefault = networkDefault;
+            this.assignedIPs = assignedIPs;
         }
 
         public String getId(){

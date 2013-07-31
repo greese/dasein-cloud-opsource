@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2012 enStratus Networks Inc
+ * Copyright (C) 2009-2013 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,23 +35,18 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.IPVersion;
-import org.dasein.cloud.network.LbAlgorithm;
-import org.dasein.cloud.network.LbListener;
-import org.dasein.cloud.network.LbProtocol;
-import org.dasein.cloud.network.LoadBalancer;
-import org.dasein.cloud.network.LoadBalancerAddressType;
-import org.dasein.cloud.network.LoadBalancerSupport;
-import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.network.*;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.cloud.util.APITrace;
+import org.dasein.util.JitCollection;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class LoadBalancers implements LoadBalancerSupport { 
+public class LoadBalancers extends AbstractLoadBalancerSupport<OpSource> {
 	static public final String ASSIGN_TO_LOAD_BALANCER_RULE       = "assignToLoadBalancerRule";
 	static public final String CREATE_LOAD_BALANCER_RULE          = "createLoadBalancerRule";
 	static public final String DELETE_LOAD_BALANCER_RULE          = "deleteLoadBalancerRule";
@@ -59,9 +54,10 @@ public class LoadBalancers implements LoadBalancerSupport {
 	static public final String LIST_LOAD_BALANCER_RULE_INSTANCES  = "listLoadBalancerRuleInstances";
 	static public final String REMOVE_FROM_LOAD_BALANCER_RULE     = "removeFromLoadBalancerRule";
 	static private final Logger logger = Logger.getLogger(LoadBalancers.class);
-	private OpSource provider;
+	private OpSource provider = null;
 
 	LoadBalancers(OpSource provider) {
+        super(provider);
 		this.provider = provider;
 	}
 
@@ -245,43 +241,48 @@ public class LoadBalancers implements LoadBalancerSupport {
 
 	@Override
 	public void addServers(String toLoadBalancerId, String ... serverIds) throws CloudException, InternalException {
-		
-		String networkId = this.getNetworkIdFromLoadBalancerId(toLoadBalancerId);
-		if( networkId == null ) {
-			throw new CloudException("No such load balancer: " + toLoadBalancerId);
-		}
-		
-		if( serverIds == null || serverIds.length < 1 ) {
-			throw new CloudException("Server is null");
-		}
-		
-		/** Check if network of LB and Servers are the same */		
-		for(String serverId: serverIds){	    	
-			VirtualMachine vm =  provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);			    	
-			if(vm != null && serverId.equals(vm.getProviderVirtualMachineId())){
-				String currentVlanId = vm.getProviderVlanId();
-				/** VMs are not within the same VLAN as LB */
-				if(!currentVlanId.equals(networkId)){
-					logger.error("Currently, OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
-					throw new CloudException("Currently,LB's network Id is " + networkId +  " while server with Id " + serverId + "'s network Id is " + currentVlanId + "; However OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
-				}	
-			}else{
-				throw new CloudException("Can not locate VM with the Id " + serverId + " while trying to add server to the LB with Id " + toLoadBalancerId );
-			}			    	
-		}	
-		
-		String serverFarmId = getServerFarmIdFromLbId(null, toLoadBalancerId);
-		if( serverFarmId == null ) {
-			throw new CloudException("No such load balancer: " + toLoadBalancerId);
-		}
+        APITrace.begin(provider, "LB.addServers");
+        try {
+            String networkId = this.getNetworkIdFromLoadBalancerId(toLoadBalancerId);
+            if( networkId == null ) {
+                throw new CloudException("No such load balancer: " + toLoadBalancerId);
+            }
 
-		ArrayList<String> realServerIds = toRealServerIds(networkId, serverIds);
-		LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
-		for( String realServerId: realServerIds ) {
-			for(LbListener listener: lb.getListeners()){
-				addRealServerToServerFarm(networkId, realServerId,listener.getPublicPort(),  serverFarmId);              
-			}       	
-		}
+            if( serverIds == null || serverIds.length < 1 ) {
+                throw new CloudException("Server is null");
+            }
+
+            /** Check if network of LB and Servers are the same */
+            for(String serverId: serverIds){
+                VirtualMachine vm =  provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
+                if(vm != null && serverId.equals(vm.getProviderVirtualMachineId())){
+                    String currentVlanId = vm.getProviderVlanId();
+                    /** VMs are not within the same VLAN as LB */
+                    if(!currentVlanId.equals(networkId)){
+                        logger.error("Currently, OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
+                        throw new CloudException("Currently,LB's network Id is " + networkId +  " while server with Id " + serverId + "'s network Id is " + currentVlanId + "; However OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
+                    }
+                }else{
+                    throw new CloudException("Can not locate VM with the Id " + serverId + " while trying to add server to the LB with Id " + toLoadBalancerId );
+                }
+            }
+
+            String serverFarmId = getServerFarmIdFromLbId(null, toLoadBalancerId);
+            if( serverFarmId == null ) {
+                throw new CloudException("No such load balancer: " + toLoadBalancerId);
+            }
+
+            ArrayList<String> realServerIds = toRealServerIds(networkId, serverIds);
+            LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
+            for( String realServerId: realServerIds ) {
+                for(LbListener listener: lb.getListeners()){
+                    addRealServerToServerFarm(networkId, realServerId,listener.getPublicPort(),  serverFarmId);
+                }
+            }
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 	/**
 	 * https://<Cloud API URL>/oec/0.9/{org-id}/network/{networkid}/
@@ -506,36 +507,43 @@ serverFarm/{server-farm-id}/addRealServer
 	 * LB in opsource can only be created when the VMs, ip address for the LB are within the same VLAN
 	 * https://<Cloud API URL>/oec/0.9/{org-id}/network/{network-id}/vip
 	 */
+    @Deprecated
 	@Override
 	public String create(String name, String description, String addressId, String[] dcIds, LbListener[] listeners, String[] servers) throws CloudException, InternalException {
-		if(servers == null){
-			logger.error("Can not create load balancer with servers becasue servers is null");
-			throw new CloudException("Can not create load balancer with servers becasue servers is null");
-		}
+        APITrace.begin(provider, "LB.create");
+        try {
+            if(servers == null){
+                logger.error("Can not create load balancer with servers becasue servers is null");
+                throw new CloudException("Can not create load balancer with servers becasue servers is null");
+            }
 
-		/** Use Server's VLan */
-		ArrayList<VirtualMachine> vms = (ArrayList<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
-		boolean firstServer = true;
-		String networkId = null;
-		for(String server: servers){	    	
-			for(VirtualMachine vm: vms){	    			    	
-				if(server.equals(vm.getProviderVirtualMachineId())){
-					String currentVlanId = vm.getProviderVlanId();
-					if(firstServer){
-						networkId = currentVlanId;
-						firstServer = false;
-						break;
-					}else{
-						/** VMs are not within the same VLAN */
-						if(!currentVlanId.equals(networkId)){
-							logger.error("Currently, OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
-							throw new CloudException("Currently, OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
-						}
-					}	    			
-				}
-			}	    	
-		}
-		return create(name, description, addressId, dcIds, listeners, servers, networkId);	    
+            /** Use Server's VLan */
+            JitCollection<VirtualMachine> vms = (JitCollection<VirtualMachine>) provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+            boolean firstServer = true;
+            String networkId = null;
+            for(String server: servers){
+                for(VirtualMachine vm: vms){
+                    if(server.equals(vm.getProviderVirtualMachineId())){
+                        String currentVlanId = vm.getProviderVlanId();
+                        if(firstServer){
+                            networkId = currentVlanId;
+                            firstServer = false;
+                            break;
+                        }else{
+                            /** VMs are not within the same VLAN */
+                            if(!currentVlanId.equals(networkId)){
+                                logger.error("Currently, OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
+                                throw new CloudException("Currently, OpSource does not support to create LB accross multiple network, e.g., the network of LB'Ip address and vm should be the same");
+                            }
+                        }
+                    }
+                }
+            }
+            return create(name, description, addressId, dcIds, listeners, servers, networkId);
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 
@@ -863,29 +871,53 @@ serverFarm/{server-farm-id}
 
 	@Override
 	public LoadBalancer getLoadBalancer(String loadBalancerId) throws CloudException, InternalException {
-		ArrayList<LoadBalancer> list = (ArrayList<LoadBalancer>) listLoadBalancers();
-		if(list == null){
-			return null;
-		}
-		for(LoadBalancer balancer : list){
-			if(balancer.getProviderLoadBalancerId().equals(loadBalancerId)){
-				return balancer;
-			}
-		}
-		return null;
+        APITrace.begin(provider, "LB.getLoadBalancer");
+        try {
+            ArrayList<LoadBalancer> list = (ArrayList<LoadBalancer>) listLoadBalancers();
+            if(list == null){
+                return null;
+            }
+            for(LoadBalancer balancer : list){
+                if(balancer.getProviderLoadBalancerId().equals(loadBalancerId)){
+                    return balancer;
+                }
+            }
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
-	public LoadBalancer getLoadBalancer(String networkId, String loadBalancerId) throws CloudException, InternalException {
-		ArrayList<LoadBalancer> list = (ArrayList<LoadBalancer>) listLoadBalancers(networkId);
-		if(list == null){
-			return null;
-		}
-		for(LoadBalancer balancer : list){
-			if(balancer.getProviderLoadBalancerId().equals(loadBalancerId)){
-				return balancer;
-			}
-		}
-		return null;
+    @Deprecated
+    @Override
+    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId) throws CloudException, InternalException {
+        return Collections.emptyList(); // todo: implement me
+    }
+
+    @Deprecated
+    @Override
+    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId, String... serverIdsToCheck) throws CloudException, InternalException {
+        return Collections.emptyList(); //todo implement me
+    }
+
+    public LoadBalancer getLoadBalancer(String networkId, String loadBalancerId) throws CloudException, InternalException {
+        APITrace.begin(provider, "LB.getLoadBalancerOnNetwork");
+        try {
+            ArrayList<LoadBalancer> list = (ArrayList<LoadBalancer>) listLoadBalancers(networkId);
+            if(list == null){
+                return null;
+            }
+            for(LoadBalancer balancer : list){
+                if(balancer.getProviderLoadBalancerId().equals(loadBalancerId)){
+                    return balancer;
+                }
+            }
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 	@Override
@@ -1079,16 +1111,6 @@ serverFarm/{server-farm-id}
 	}
 
 	@Override
-	public boolean requiresListenerOnCreate() throws CloudException, InternalException {
-		return true;
-	}
-
-	@Override
-	public boolean requiresServerOnCreate() throws CloudException, InternalException {
-		return true;
-	}
-
-	@Override
 	public boolean isSubscribed() throws CloudException, InternalException {
 		return true;
 	}
@@ -1270,58 +1292,70 @@ serverFarm/{server-farm-id}
 
 	@Override
 	public Iterable<LoadBalancer> listLoadBalancers() throws CloudException, InternalException {
-		/** Load balancer is based on network level */
-		ArrayList<VLAN> networkList = (ArrayList<VLAN>) provider.getNetworkServices().getVlanSupport().listVlans();
+        APITrace.begin(provider, "LB.listLoadBalancers");
+        try {
+            /** Load balancer is based on network level */
+            ArrayList<VLAN> networkList = (ArrayList<VLAN>) provider.getNetworkServices().getVlanSupport().listVlans();
 
-		if(networkList == null){
-			return Collections.emptyList();
-		}
+            if(networkList == null){
+                return Collections.emptyList();
+            }
 
-		ArrayList<LoadBalancer> list = new ArrayList<LoadBalancer>();
-		for(VLAN network : networkList){
-			ArrayList<LoadBalancer> newlist = (ArrayList<LoadBalancer>) listLoadBalancers(network.getProviderVlanId());
+            ArrayList<LoadBalancer> list = new ArrayList<LoadBalancer>();
+            for(VLAN network : networkList){
+                ArrayList<LoadBalancer> newlist = (ArrayList<LoadBalancer>) listLoadBalancers(network.getProviderVlanId());
 
-			if(newlist != null){
-				list.addAll(newlist);
-			}
-		}
-		return list;
+                if(newlist != null){
+                    list.addAll(newlist);
+                }
+            }
+            return list;
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 	public Iterable<LoadBalancer> listLoadBalancers(String networkId) throws CloudException, InternalException {
-		if(networkId == null){
-			return null;
-		}
-		ArrayList<LoadBalancer> list = new ArrayList<LoadBalancer>();
-		HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-		Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
-		parameters.put(0, param);
-		param = new Param(networkId, null);
-		parameters.put(1, param);
-		param = new Param("vip", null);
-		parameters.put(2, param);
+        APITrace.begin(provider, "LB.listLoadBalancersOnNetwork");
+        try {
+            if(networkId == null){
+                return null;
+            }
+            ArrayList<LoadBalancer> list = new ArrayList<LoadBalancer>();
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+            parameters.put(0, param);
+            param = new Param(networkId, null);
+            parameters.put(1, param);
+            param = new Param("vip", null);
+            parameters.put(2, param);
 
-		OpSourceMethod method = new OpSourceMethod(provider,
-				provider.buildUrl(null,true, parameters),
-				provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
 
-		Document doc = method.invoke();
-        String sNS = "";
-        try{
-            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+            Document doc = method.invoke();
+            String sNS = "";
+            try{
+                sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+            }
+            catch(IndexOutOfBoundsException ex){}
+            NodeList matches = doc.getElementsByTagName(sNS + "vip");
+            if(matches != null){
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+                    LoadBalancer balancer = toLoadBalancer(node, networkId );
+                    if(balancer != null){
+                        list.add(balancer);
+                    }
+                }
+            }
+            return list;
         }
-        catch(IndexOutOfBoundsException ex){}
-		NodeList matches = doc.getElementsByTagName(sNS + "vip");
-		if(matches != null){
-			for( int i=0; i<matches.getLength(); i++ ) {
-				Node node = matches.item(i); 
-				LoadBalancer balancer = toLoadBalancer(node, networkId );
-				if(balancer != null){
-					list.add(balancer);                    	
-				}
-			}
-		}    
-		return list;
+        finally {
+            APITrace.end();
+        }
 	}
 
 	/**
@@ -1330,28 +1364,34 @@ serverFarm/{server-farm-id}
 	 */
 
 	public void removeProbe(String networkId, String probeId) throws InternalException, CloudException{
-		HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-		Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
+        APITrace.begin(provider, "LB.removeProbe");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.NETWORK_BASE_PATH, null);
 
-		parameters.put(0, param);
+            parameters.put(0, param);
 
-		param = new Param(networkId, null);
+            param = new Param(networkId, null);
 
-		parameters.put(1, param);
+            parameters.put(1, param);
 
-		param = new Param("probe", null);
+            param = new Param("probe", null);
 
-		parameters.put(2, param);
+            parameters.put(2, param);
 
-		param = new Param(probeId, null);
+            param = new Param(probeId, null);
 
-		parameters.put(3, param);      	
+            parameters.put(3, param);
 
-		OpSourceMethod method = new OpSourceMethod(provider, 
-				provider.buildUrl("delete",true, parameters),
-				provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl("delete",true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
 
-		method.requestResult("Delete probe", method.invoke(), "result", "resultDetail");
+            method.requestResult("Delete probe", method.invoke(), "result", "resultDetail");
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 
@@ -1405,70 +1445,76 @@ serverFarm/{server-farm-id}
 		method.requestResult("Delete server Farm", method.invoke(), "result", "resultDetail");
 	}
 
-
+    @Deprecated
 	@Override
 	public void remove(String loadBalancerId) throws CloudException, InternalException {
-		if(loadBalancerId == null){    		
-			throw new CloudException(" load balancer is null");
-		}		
-		String networkId = this.getNetworkIdFromLoadBalancerId(loadBalancerId);
-		if( networkId == null ) {
-			throw new CloudException("Network Id not found while trying to terminating LB");
-		}
-		
-		LoadBalancer lb = getLoadBalancer(networkId, loadBalancerId);
-		if( lb == null ) {
-			throw new CloudException("No such load balancer");
-		}
+        APITrace.begin(provider, "LB.remove");
+        try {
+            if(loadBalancerId == null){
+                throw new CloudException(" load balancer is null");
+            }
+            String networkId = this.getNetworkIdFromLoadBalancerId(loadBalancerId);
+            if( networkId == null ) {
+                throw new CloudException("Network Id not found while trying to terminating LB");
+            }
 
-		String serverFarmId = getServerFarmIdFromLbId(networkId, loadBalancerId);
+            LoadBalancer lb = getLoadBalancer(networkId, loadBalancerId);
+            if( lb == null ) {
+                throw new CloudException("No such load balancer");
+            }
 
-		if( serverFarmId == null ) {
-			logger.error("Cant not locate server farm " + serverFarmId + " while trying to delete lb");
-			throw new CloudException("Cant not locate server farm " + serverFarmId + " while trying to delete lb");
-		}   
+            String serverFarmId = getServerFarmIdFromLbId(networkId, loadBalancerId);
 
-		/**  Remove vip */
-		removeVip(networkId, loadBalancerId);
-		/** Remove Probe from server Farm */
-		LbListener[] listeners = lb.getListeners();
-		if(listeners != null){
-			for(LbListener listener : listeners ){
-				Probe probe = getProbe(networkId, listener.getNetworkProtocol(), lb.getAddress(), listener.getPublicPort());
+            if( serverFarmId == null ) {
+                logger.error("Cant not locate server farm " + serverFarmId + " while trying to delete lb");
+                throw new CloudException("Cant not locate server farm " + serverFarmId + " while trying to delete lb");
+            }
 
-				if(probe != null){
-					/** remove from server farm */
-					removeProbeFromServerFarm(networkId, probe.getProbeId(), serverFarmId);
-					/**  remove probe */
-					try{
-						removeProbe(networkId, probe.getProbeId()); 
-					}
-					catch(Throwable e){
-						/**  Other balancer/server Farm was using this probe */
-						logger.error(e);						
-					}        		     
-				}
-			}        		
-		}           
-		try{
-			/** Remove servers from real server and terminate the servers */
-			ArrayList<RealServer> list = (ArrayList<RealServer>) listRealServerInServerFarm(networkId, serverFarmId);
-			for(RealServer realServer : list){
-				/** Remove real server from server farm first */   		
-				removeRealServerFromServerFarm(networkId, realServer.getId(), realServer.getPort(), serverFarmId);
-				/** Remove the server? */
-				removeRealServer(networkId, realServer.getId());
-				/** Terminate? */    		
-				//provider.getComputeServices().getVirtualMachineSupport().terminate(realServer.getServerId());
+            /**  Remove vip */
+            removeVip(networkId, loadBalancerId);
+            /** Remove Probe from server Farm */
+            LbListener[] listeners = lb.getListeners();
+            if(listeners != null){
+                for(LbListener listener : listeners ){
+                    Probe probe = getProbe(networkId, listener.getNetworkProtocol(), lb.getAddress(), listener.getPublicPort());
 
-			}	        
-			/** Remove server Farm */
-			removeServerFarm(networkId, serverFarmId);    
-		}
-		catch(Throwable e){
-			/** Other balancer/server Farm was using this realserver */
-			logger.error(e);
-		}
+                    if(probe != null){
+                        /** remove from server farm */
+                        removeProbeFromServerFarm(networkId, probe.getProbeId(), serverFarmId);
+                        /**  remove probe */
+                        try{
+                            removeProbe(networkId, probe.getProbeId());
+                        }
+                        catch(Throwable e){
+                            /**  Other balancer/server Farm was using this probe */
+                            logger.error(e);
+                        }
+                    }
+                }
+            }
+            try{
+                /** Remove servers from real server and terminate the servers */
+                ArrayList<RealServer> list = (ArrayList<RealServer>) listRealServerInServerFarm(networkId, serverFarmId);
+                for(RealServer realServer : list){
+                    /** Remove real server from server farm first */
+                    removeRealServerFromServerFarm(networkId, realServer.getId(), realServer.getPort(), serverFarmId);
+                    /** Remove the server? */
+                    removeRealServer(networkId, realServer.getId());
+                    /** Terminate? */
+                    //provider.getComputeServices().getVirtualMachineSupport().terminate(realServer.getServerId());
+
+                }
+                /** Remove server Farm */
+                removeServerFarm(networkId, serverFarmId);
+            }
+            catch(Throwable e){
+                /** Other balancer/server Farm was using this realserver */
+                logger.error(e);
+            }
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 	@Override
@@ -1601,34 +1647,40 @@ serverFarm/{server-farm-id}/removeRealServer
 
 	@Override
 	public void removeServers(String toLoadBalancerId, String ... serverIds) throws CloudException, InternalException {
-		String networkId = this.getNetworkIdFromLoadBalancerId(toLoadBalancerId);
-		if(networkId == null){
-			throw new CloudException("No network Id found for balancer while trying to remove servers from " + toLoadBalancerId);
-		}
-		
-		String serverFarmId = getServerFarmIdFromLbId(networkId, toLoadBalancerId);
-		if( serverFarmId == null ) {
-			throw new CloudException("No such load balancer: " + toLoadBalancerId);
-		}		
-		try{
-			ArrayList<RealServer> list = (ArrayList<RealServer>) listRealServerInServerFarm(networkId, serverFarmId);
-			for(RealServer realServer : list){
-				for(String serverId : serverIds){
-					if(realServer.getServerId().equals(serverId)){
-						/** Remove real server from server farm first */   		
-						removeRealServerFromServerFarm(networkId, realServer.getId(), realServer.getPort(), serverFarmId);
-						/** Remove the server? */
-						removeRealServer(networkId, realServer.getId());
-						/** Terminate? */    		
-						//provider.getComputeServices().getVirtualMachineSupport().terminate(realServer.getServerId());
-					}    			
-				}
-			}	         
-		}
-		catch(Throwable e){
-			/** Other balancer/server Farm was using this realserver */
-			logger.error(e);
-		}
+        APITrace.begin(provider, "LB.removeServers");
+        try {
+            String networkId = this.getNetworkIdFromLoadBalancerId(toLoadBalancerId);
+            if(networkId == null){
+                throw new CloudException("No network Id found for balancer while trying to remove servers from " + toLoadBalancerId);
+            }
+
+            String serverFarmId = getServerFarmIdFromLbId(networkId, toLoadBalancerId);
+            if( serverFarmId == null ) {
+                throw new CloudException("No such load balancer: " + toLoadBalancerId);
+            }
+            try{
+                ArrayList<RealServer> list = (ArrayList<RealServer>) listRealServerInServerFarm(networkId, serverFarmId);
+                for(RealServer realServer : list){
+                    for(String serverId : serverIds){
+                        if(realServer.getServerId().equals(serverId)){
+                            /** Remove real server from server farm first */
+                            removeRealServerFromServerFarm(networkId, realServer.getId(), realServer.getPort(), serverFarmId);
+                            /** Remove the server? */
+                            removeRealServer(networkId, realServer.getId());
+                            /** Terminate? */
+                            //provider.getComputeServices().getVirtualMachineSupport().terminate(realServer.getServerId());
+                        }
+                    }
+                }
+            }
+            catch(Throwable e){
+                /** Other balancer/server Farm was using this realserver */
+                logger.error(e);
+            }
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 

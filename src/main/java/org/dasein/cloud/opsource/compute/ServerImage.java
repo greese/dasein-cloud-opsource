@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2012 enStratus Networks Inc
+ * Copyright (C) 2009-2013 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,12 +18,10 @@
 
 package org.dasein.cloud.opsource.compute;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.TreeSet;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -31,16 +29,16 @@ import javax.annotation.Nullable;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.*;
 import org.dasein.cloud.compute.*;
-import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
 
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class ServerImage implements MachineImageSupport {
+public class ServerImage extends AbstractImageSupport {
     static private final Logger logger = OpSource.getLogger(ServerImage.class);
 
 	static private final String DEPLOYED_PATH = "deployed";
@@ -58,12 +56,13 @@ public class ServerImage implements MachineImageSupport {
     private OpSource provider;
     
     public ServerImage(OpSource provider) {
+        super(provider);
         this.provider = provider;
     }
     
     public MachineImage getOpSourceImage(String imageId) throws InternalException, CloudException{
     	
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listCustomerMachineImages();
+    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listCustomerMachineImages(ImageFilterOptions.getInstance());
 
         for( MachineImage img: images) {
 
@@ -73,7 +72,7 @@ public class ServerImage implements MachineImageSupport {
         }
 
 
-        images = (ArrayList<MachineImage>) listOpSourceMachineImages();
+        images = (ArrayList<MachineImage>) listOpSourceMachineImages(ImageFilterOptions.getInstance());
      
         for( MachineImage img: images) {       	
             
@@ -84,70 +83,38 @@ public class ServerImage implements MachineImageSupport {
         return null;    	
     }
 
-    @Override
-    public void addImageShare(@Nonnull String s, @Nonnull String s2) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void addPublicShare(@Nonnull String s) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public String bundleVirtualMachine(@Nonnull String s, @Nonnull MachineImageFormat machineImageFormat, @Nonnull String s2, @Nonnull String s3) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void bundleVirtualMachineAsync(@Nonnull String s, @Nonnull MachineImageFormat machineImageFormat, @Nonnull String s2, @Nonnull String s3, @Nonnull AsynchronousTask<String> stringAsynchronousTask) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public MachineImage captureImage(@Nonnull ImageCreateOptions imageCreateOptions) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void captureImageAsync(@Nonnull ImageCreateOptions imageCreateOptions, @Nonnull AsynchronousTask<MachineImage> machineImageAsynchronousTask) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
     @Nullable
     @Override
     public MachineImage getImage(@Nonnull String imageId) throws CloudException, InternalException {
-        return getMachineImage(imageId);
-    }
+        APITrace.begin(provider, "Image.getImage");
+        try {
+            //First check the pending images, because it is mostly being checked by customers
+            ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(null);
+            for(MachineImage image : list){
+                if(image.getProviderMachineImageId().equals(imageId)){
+                    return image;
+                }
+            }
 
-    @Override
-    @Deprecated
-    public MachineImage getMachineImage(String imageId) throws InternalException, CloudException {
-    	//First check the pending images, because it is mostly being checked by customers
-    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
-    	for(MachineImage image : list){
-    		if(image.getProviderMachineImageId().equals(imageId)){
-    			return image;
-    		}    		
-    	}
-    	
-    	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
-    	for(MachineImage image : list){
-    		if(image.getProviderMachineImageId().equals(imageId)){
-    			return image;
-    		}    		
-    	}
-    	
-    	list = (ArrayList<MachineImage>) listOpSourceMachineImages();
-    	for(MachineImage image : list){
-    		if(image.getProviderMachineImageId().equals(imageId)){
-    			return image;
-    		}    		
-    	}    	
+            list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(null);
+            for(MachineImage image : list){
+                if(image.getProviderMachineImageId().equals(imageId)){
+                    return image;
+                }
+            }
 
-        return null;
+            list = (ArrayList<MachineImage>) listOpSourceMachineImages(null);
+            for(MachineImage image : list){
+                if(image.getProviderMachineImageId().equals(imageId)){
+                    return image;
+                }
+            }
+
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
     }
     
     @Override
@@ -159,14 +126,13 @@ public class ServerImage implements MachineImageSupport {
     @Nonnull
     @Override
     public String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass imageClass) {
-        return "OS Image";
+        return "Server Image";  //TODO: Implement for 2013.01
     }
 
     @Override
     public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls){
         return "Customer Image";
     }
-
 
     private Architecture guess(String desc) {
         Architecture arch = Architecture.I64;
@@ -195,7 +161,7 @@ public class ServerImage implements MachineImageSupport {
         return arch;
     }
     
-    private void guessSoftware(MachineImage image) {
+    private @Nonnull String guessSoftware(MachineImage image) {
         String str = (image.getName() + " " + image.getDescription()).toLowerCase();
         StringBuilder software = new StringBuilder();
         boolean comma = false;
@@ -215,88 +181,66 @@ public class ServerImage implements MachineImageSupport {
             }
             comma = true;
         }
-        image.setSoftware(software.toString());
-    }
-    
-    @Override
-    @Deprecated
-    public boolean hasPublicLibrary() {
-        return true;
-    }
-
-    @Nonnull
-    @Override
-    public Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        return software.toString();
     }
 
     @Override
-    @Deprecated
-    public AsynchronousTask<String> imageVirtualMachine(String vmId, String name, String description) throws CloudException, InternalException {
-      
-        final AsynchronousTask<String> task = new AsynchronousTask<String>();
-        final String fname = name;
-        final String fdesc = description;
-        final String fvmId = vmId;
-        
-        Thread t = new Thread() {
-            public void run() {
-                try {
-                    MachineImage image = imageVirtualMachine(fvmId, fname, fdesc, task);
-                
-                    task.completeWithResult(image.getProviderMachineImageId());
+    protected @Nonnull MachineImage capture(@Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> task) throws CloudException, InternalException {
+        APITrace.begin(provider, "Image.capture");
+        try {
+            String vmId = options.getVirtualMachineId();
+
+            if( vmId == null ) {
+                throw new CloudException("No VM ID was specified");
+            }
+            @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
+
+            if( vm != null ) {
+                throw new CloudException("No such virtual machine: " + vmId);
+            }
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+            parameters.put(0, param);
+
+            param = new Param(vmId, null);
+            parameters.put(1, param);
+
+            param = new Param(CREATE_IMAGE, options.getName());
+            parameters.put(2, param);
+
+            // Can not use space in the url
+            param = new Param("desc", options.getDescription().replace(" ", "_"));
+            parameters.put(3, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+
+            if(method.parseRequestResult("Imaging", method.invoke(), "result", "resultDetail")){
+                //First check the pending images, because it is mostly being checked by customers
+                ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
+                for(MachineImage image : list){
+                    if(image.getName().equals(options.getName())){
+                        return image;
+                    }
                 }
-                catch( Throwable t ) {
-                    task.complete(t);
+                //Check deployed Image
+                list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages(ImageFilterOptions.getInstance());
+                for(MachineImage image : list){
+                    if(image.getName().equals(options.getName())){
+                        return image;
+                    }
                 }
             }
-        };
-
-        t.start();
-        return task;
-    }
-    
-    private MachineImage imageVirtualMachine(String vmId, String name, String description, AsynchronousTask<String> task) throws CloudException, InternalException {
-
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-    	parameters.put(0, param);
-    	   	
-        param = new Param(vmId, null);
-    	parameters.put(1, param);
-    	
-        param = new Param(CREATE_IMAGE, name);
-    	parameters.put(2, param);
-    	
-    	// Can not use space in the url
-        param = new Param("desc", description.replace(" ", "_"));
-      	parameters.put(3, param);
-    
-    	OpSourceMethod method = new OpSourceMethod(provider,    			
-    			provider.buildUrl(null,true, parameters),
-    			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-    	
-    	if(method.parseRequestResult("Imaging", method.invoke(), "result", "resultDetail")){
-    	   	//First check the pending images, because it is mostly being checked by customers
-        	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachinePendingImages();
-        	for(MachineImage image : list){
-        		if(image.getName().equals(name)){
-        			return image;
-        		}    		
-        	}
-        	//Check deployed Image
-        	list = (ArrayList<MachineImage>) this.listCustomerMachineDeployedImages();
-        	for(MachineImage image : list){
-        		if(image.getName().equals(name)){
-        			return image;
-        		}    		
-        	}    		
-    	}
-    	return null; 
+            throw new CloudException("No image, no error");
+        }
+        finally {
+            APITrace.end();
+        }
     }
     
     @Override
-    public boolean isImageSharedWithPublic(String templateId) throws CloudException, InternalException {
+    public boolean isImageSharedWithPublic(@Nonnull String templateId) throws CloudException, InternalException {
 
         return false;
     }
@@ -308,8 +252,40 @@ public class ServerImage implements MachineImageSupport {
 
     @Nonnull
     @Override
-    public Iterable<ResourceStatus> listImageStatus(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+    public Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
+        APITrace.begin(provider, "Image.listImages");
+        try {
+            if( options == null || options.getAccountNumber() == null ) {
+                ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
+                ArrayList<MachineImage> list =  (ArrayList<MachineImage>) listCustomerMachineImages(options);
+                if(list != null){
+                    allList.addAll(list);
+                }
+                /** Only list the private image */
+
+                /**
+                 list = (ArrayList<MachineImage>) listOpSourceMachineImages();
+                 if(list != null){
+                 allList.addAll(list);
+                 }*/
+                return allList;
+            }
+            else {
+                String account = options.getAccountNumber();
+                ProviderContext ctx = getProvider().getContext();
+
+                if( ctx == null ) {
+                    throw new CloudException("No context was set for this request");
+                }
+                if( account == null || account.equals(ctx.getAccountNumber()) ) {
+                    return listCustomerMachineImages(options);
+                }
+                return listOpSourceMachineImages(options);
+            }
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Nonnull
@@ -326,7 +302,7 @@ public class ServerImage implements MachineImageSupport {
         Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
         parameters.put(0, param);
 
-        param = new Param(provider.getDefaultRegionId(), null);
+        param = new Param(provider.getContext().getRegionId(), null);
         parameters.put(1, param);
 
         OpSourceMethod method = new OpSourceMethod(provider,
@@ -356,39 +332,19 @@ public class ServerImage implements MachineImageSupport {
     @Nonnull
     @Override
     public Iterable<MachineImage> listImages(@Nonnull ImageClass imageClass, @Nonnull String ownedBy) throws CloudException, InternalException {
-        //listCustomerMachineImages
-        return null;  //TODO: Implement for 2013.01
+        return listImages(imageClass);
     }
 
-    @Override
-    @Deprecated
-    public Iterable<MachineImage> listMachineImages() throws InternalException, CloudException {
-    	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
- 
-    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachineImages();
-    	if(list != null){
-    		allList.addAll(list);
-    	}
-    	/** Only list the private image */
-    	
-    	/**    	
- 		list = (ArrayList<MachineImage>) listOpSourceMachineImages();
-    	if(list != null){
-    		allList.addAll(list);
-    	}*/
-    	
-        return allList;
-    }
 
-    private Iterable<MachineImage> listCustomerMachineImages() throws InternalException, CloudException {
+    private Iterable<MachineImage> listCustomerMachineImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
     	ArrayList<MachineImage> allList = new ArrayList<MachineImage>();
     	
-    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachineDeployedImages();
+    	ArrayList<MachineImage> list = (ArrayList<MachineImage>) listCustomerMachineDeployedImages(options);
     	if(list != null){
     		allList.addAll(list);
     	}
     	
-    	list = (ArrayList<MachineImage>) this.listCustomerMachinePendingImages();
+    	list = (ArrayList<MachineImage>) this.listCustomerMachinePendingImages(ImageFilterOptions.getInstance());
     	if(list != null){
     		allList.addAll(list);
     	}
@@ -400,13 +356,11 @@ public class ServerImage implements MachineImageSupport {
 	 *	image/deployedWithSoftwareLabels/{location-id}
      */
     
-    private Iterable<MachineImage> listCustomerMachineDeployedImages() throws InternalException, CloudException {
+    private Iterable<MachineImage> listCustomerMachineDeployedImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachineDeployedImages()");
         }
-        try{        	
-   
-	    	
+        try{
 	    	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
 	    	
 	    	/** Get deployed Image */
@@ -416,7 +370,7 @@ public class ServerImage implements MachineImageSupport {
 	    	param = new Param(DEPLOYED_PATH, null);
 	    	parameters.put(1, param);
 	    	
-	    	param = new Param(provider.getDefaultRegionId(), null);
+	    	param = new Param(provider.getContext().getRegionId(), null);
 	    	parameters.put(2, param);   	
 	    
 	    	OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(null, true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
@@ -425,9 +379,9 @@ public class ServerImage implements MachineImageSupport {
 	        if(matches != null){
 	            for( int i=0; i<matches.getLength(); i++ ) {
 	                Node node = matches.item(i);            
-	                MachineImage image = this.toImage(node, true, false, "");
+	                MachineImage image = toImage(node, true, false, "");
 	                
-	                if( image != null ) {
+	                if( image != null && (options == null || options.matches(image)) ) {
 	                	list.add(image);
 	                }
 	            }
@@ -440,7 +394,7 @@ public class ServerImage implements MachineImageSupport {
         }
     }
     
-    private Iterable<MachineImage> listCustomerMachinePendingImages() throws InternalException, CloudException {
+    private Iterable<MachineImage> listCustomerMachinePendingImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
         if( logger.isTraceEnabled() ) {
         	logger.trace("ENTER: " + ServerImage.class.getName() + ".listCustomerMachinePendingImages()");
         }
@@ -455,7 +409,7 @@ public class ServerImage implements MachineImageSupport {
     	param = new Param(PENDING_DEPLOY_PATH, null);
     	parameters.put(1, param);
     	
-    	param = new Param(provider.getDefaultRegionId(), null);
+    	param = new Param(provider.getContext().getRegionId(), null);
     	parameters.put(2, param);
     
     	OpSourceMethod method = new OpSourceMethod(provider,
@@ -468,7 +422,7 @@ public class ServerImage implements MachineImageSupport {
                 Node node = matches.item(i);            
                 MachineImage image = toImage(node, true, true, "");
                 
-                if( image != null ) {
+                if( image != null && (options == null || options.matches(image)) ) {
                 	list.add(image);
                 }
             }
@@ -479,84 +433,62 @@ public class ServerImage implements MachineImageSupport {
     	
         return list;
     }
-    
-    
-    public Iterable<MachineImage> listOpSourceMachineImages() throws InternalException, CloudException {
-        if( logger.isTraceEnabled() ) {
-        	logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
-        }
-    	
-    	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
-    	
-    	/** Get OpSource public Image */
-    	HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
-    	Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
-    	parameters.put(0, param);
-    	
-    	param = new Param(provider.getDefaultRegionId(), null);
-    	parameters.put(1, param);
-    
-    	OpSourceMethod method = new OpSourceMethod(provider,
-    						provider.buildUrl(null, false, parameters),
-    						provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-        
-    	Document doc = method.invoke();
-    	
-        NodeList matches = doc.getElementsByTagName(OpSource_IMAGE_TAG);
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
-            
-            MachineImage image = toImage(node,false,false, "");
-            
-            if( image != null ) {
-            	list.add(image);
-            }
-        }        
 
-        if( logger.isTraceEnabled() ) {
-        	logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
-        }    	
-  
-        return list;
-    }
-    
-    @Override
-    @Deprecated
-    public Iterable<MachineImage> listMachineImagesOwnedBy(String accountId) throws CloudException, InternalException {
-    	/** Only two types of owner OpSource, or customer itself */
-        /** If no account specified, return all images */
-        if (provider.getContext().getAccountNumber().equals(accountId)){
-        	return listCustomerMachineImages();
-        }else{
-        	return listOpSourceMachineImages();
+    public Iterable<MachineImage> listOpSourceMachineImages(@Nullable ImageFilterOptions options) throws InternalException, CloudException {
+        APITrace.begin(provider, "Image.listOpSourceMachineImages");
+        try {
+            ArrayList<MachineImage> list = new ArrayList<MachineImage>();
+
+            /** Get OpSource public Image */
+            HashMap<Integer, Param> parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
+            parameters.put(0, param);
+
+            param = new Param(provider.getDefaultRegionId(), null);
+            parameters.put(1, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                                provider.buildUrl(null, false, parameters),
+                                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+
+            Document doc = method.invoke();
+
+            NodeList matches = doc.getElementsByTagName(OpSource_IMAGE_TAG);
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
+
+                MachineImage image = toImage(node,false,false, "");
+
+                if( image != null && (options == null || options.matches(image)) ) {
+                    list.add(image);
+                }
+            }
+
+            if( logger.isTraceEnabled() ) {
+                logger.trace("ENTER: " + ServerImage.class.getName() + ".listOpSourceMachineImages()");
+            }
+
+            return list;
         }
-    }
-    
-    @Override
-    public Iterable<String> listShares(String templateId) throws CloudException, InternalException {
-    	return new TreeSet<String>();     
+        finally {
+            APITrace.end();
+        }
     }
 
     @Nonnull
     @Override
     public Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        return Collections.singletonList(ImageClass.MACHINE);
     }
 
     @Nonnull
     @Override
     public Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Nonnull
-    @Override
-    public MachineImage registerImageBundle(@Nonnull ImageCreateOptions imageCreateOptions) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+        return Collections.singletonList(MachineImageType.VOLUME);
     }
 
     @Override
-    public Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
+    public @Nonnull Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
         ArrayList<MachineImageFormat> list = new  ArrayList<MachineImageFormat>();
         list.add(MachineImageFormat.OVF);
         list.add(MachineImageFormat.VMDK);
@@ -565,148 +497,70 @@ public class ServerImage implements MachineImageSupport {
         return list;
     }
 
-    @Nonnull
-    @Override
-    public Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
-    }
-    
-    @Override
-    public void remove(String imageId) throws InternalException, CloudException {
-    	
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
-    	parameters.put(0, param);
-    	param = new Param(imageId, null);
-    	parameters.put(1, param);    
-    	OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-    	method.requestResult("Removing image",method.invoke());
-    }
-
     @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException{
-        //TODO: Implement for 2013.02
-    }
-
-    @Override
-    public void removeAllImageShares(@Nonnull String s) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void removeImageShare(@Nonnull String s, @Nonnull String s2) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    @Override
-    public void removePublicShare(@Nonnull String s) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
-    public MachineImage searchImage(Platform platform, Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
-    
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages();
-     
-        for( MachineImage img: images) {        	
-            
-            if( img != null ) {
-                if(architecture == null || (architecture != null && !architecture.equals(img.getArchitecture())) ) {
-                    continue;
-                }
-                if((platform == null) || (platform != null && !platform.equals(Platform.UNKNOWN)) ) {
-                   continue;
-                }
-                if(img.getTag("cpuCount") == null || img.getTag("memory") == null){
-                	continue;
-                }
-                
-            	int currentCPU = Integer.valueOf((String) img.getTag("cpuCount"));
-        		int currentMemory = Integer.valueOf((String) img.getTag("memory"));
-        	
-                if(currentCPU == cpuCount && currentMemory == memoryInMb){
-                	return img;                	
-                } 
-            }
+        APITrace.begin(provider, "Image.remove");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.IMAGE_BASE_PATH, null);
+            parameters.put(0, param);
+            param = new Param(providerImageId, null);
+            parameters.put(1, param);
+            OpSourceMethod method = new OpSourceMethod(provider, provider.buildUrl(DELETE_IMAGE,true, parameters),provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+            method.requestResult("Removing image",method.invoke());
         }
-        return null;    	
-    }
-    
-    @Override
-    @Deprecated
-    public Iterable<MachineImage> searchMachineImages(String keyword, Platform platform, Architecture architecture) throws InternalException, CloudException {
-    	ArrayList<MachineImage> list = new ArrayList<MachineImage>();
-    	
-    	/**Search only OpSource public image, not include owner's images */
-    	ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages();
-     
-        for( MachineImage img: images) {        	
-            
-            if( img != null ) {
-                if( architecture != null && !architecture.equals(img.getArchitecture()) ) {
-                    continue;
-                }
-                if( platform != null && !platform.equals(Platform.UNKNOWN) ) {
-                    Platform mine = img.getPlatform();
-                    
-                    if( platform.isWindows() && !mine.isWindows() ) {
-                        continue;
-                    }
-                    if( platform.isUnix() && !mine.isUnix() ) {
-                        continue;
-                    }
-                    if( platform.isBsd() && !mine.isBsd() ) {
-                        continue;
-                    }
-                    if( platform.isLinux() && !mine.isLinux() ) {
-                        continue;
-                    }
-                    if( platform.equals(Platform.UNIX) ) {
-                        if( !mine.isUnix() ) {
-                            continue;
-                        }
-                    }
-                    else if( !platform.equals(mine) ) {
-                        continue;
-                    }
-                }
-                if( keyword != null && !keyword.equals("") ) {
-                    keyword = keyword.toLowerCase();
-                    if( !img.getProviderMachineImageId().toLowerCase().contains(keyword) ) {
-                        if( !img.getName().toLowerCase().contains(keyword) ) {
-                            if( !img.getDescription().toLowerCase().contains(keyword) ) {
-                                continue;
-                            }
-                        }
-                    }
-                }               
-                list.add(img);
-            }
+        finally {
+            APITrace.end();
         }
-        return list;
+    }
+
+    public @Nullable MachineImage searchImage(@Nullable Platform platform, @Nullable Architecture architecture, int cpuCount, int memoryInMb) throws InternalException, CloudException{
+        APITrace.begin(provider, "Image.searchImage");
+        try {
+            ImageFilterOptions options = ImageFilterOptions.getInstance();
+
+            if( platform != null ) {
+                options.onPlatform(platform);
+            }
+            if( architecture != null ) {
+                options.withArchitecture(architecture);
+            }
+            ArrayList<MachineImage> images = (ArrayList<MachineImage>) listOpSourceMachineImages(options);
+
+            for( MachineImage img: images) {
+
+                if( img != null ) {
+                    if(architecture == null || !architecture.equals(img.getArchitecture()) ) {
+                        continue;
+                    }
+                    if((platform == null) || !platform.equals(Platform.UNKNOWN) ) {
+                       continue;
+                    }
+                    if(img.getTag("cpuCount") == null || img.getTag("memory") == null){
+                        continue;
+                    }
+
+                    int currentCPU = Integer.valueOf((String) img.getTag("cpuCount"));
+                    int currentMemory = Integer.valueOf((String) img.getTag("memory"));
+
+                    if(currentCPU == cpuCount && currentMemory == memoryInMb){
+                        return img;
+                    }
+                }
+            }
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Nonnull
     @Override
-    public Iterable<MachineImage> searchImages(@Nullable String s, @Nullable String s2, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
+    public Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options) throws CloudException, InternalException {
+        return listOpSourceMachineImages(options);
     }
 
-    @Nonnull
-    @Override
-    public Iterable<MachineImage> searchPublicImages(@Nullable String s, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        return null;  //TODO: Implement for 2013.01
-    }
-
-    @Override
-    @Deprecated
-    public void shareMachineImage(String templateId, String withAccountId, boolean allow) throws CloudException, InternalException {
-    	  throw new OperationNotSupportedException("OpSource does not support share image.");
-    }
 
     @Override
     @Deprecated
@@ -736,48 +590,42 @@ public class ServerImage implements MachineImageSupport {
 
     @Override
     public boolean supportsPublicLibrary(@Nonnull ImageClass imageClass) throws CloudException, InternalException {
-        return false;  //TODO: Implement for 2013.01
+        return imageClass.equals(ImageClass.MACHINE);
     }
-
-    @Override
-    public void updateTags(@Nonnull String s, @Nonnull Tag... tags) throws CloudException, InternalException {
-        //TODO: Implement for 2013.01
-    }
-
 
     private MachineImage toImage(Node node, boolean isCustomerDeployed, boolean isPending, String nameSpace) throws CloudException, InternalException {
         Architecture bestArchitectureGuess = Architecture.I64;
         MachineImage image = new MachineImage();
-        
+
         HashMap<String,String> properties = new HashMap<String,String>();
         image.setTags(properties);
-        
+
         NodeList attributes = node.getChildNodes();
-              
+
         if(isCustomerDeployed){
-        	
-        	image.setProviderOwnerId(provider.getContext().getAccountNumber());
-        	
+
+            image.setProviderOwnerId(provider.getContext().getAccountNumber());
+
         }else{
-        	/** Default owner is opsource */        	  
-            image.setProviderOwnerId(provider.getCloudName());        	
+            /** Default owner is opsource */
+            image.setProviderOwnerId(provider.getCloudName());
         }
-       
+
         image.setType(MachineImageType.STORAGE);
         if(isPending){
-        	image.setCurrentState(MachineImageState.PENDING);
+            image.setCurrentState(MachineImageState.PENDING);
         }else{
-        	image.setCurrentState(MachineImageState.ACTIVE);
+            image.setCurrentState(MachineImageState.ACTIVE);
         }
-        
+
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
-            
+
             if(attribute.getNodeType() == Node.TEXT_NODE) continue;
-            
+
             String name = attribute.getNodeName();
             String value;
-            
+
             if( attribute.getChildNodes().getLength() > 0 ) {
                 value = attribute.getFirstChild().getNodeValue();
             }
@@ -791,8 +639,8 @@ public class ServerImage implements MachineImageSupport {
             if( name.equals(nameSpaceString + "id") ) {
                 image.setProviderMachineImageId(value);
             }else if(name.equals(nameSpaceString + "resourcePath") && value != null ){
-            	image.getTags().put("resourcePath", value);
-            }            
+                image.getTags().put("resourcePath", value);
+            }
             else if( name.equals(nameSpaceString + "name") ) {
                 image.setName(value);
                 if(  value.contains("x64") ||  value.contains("64-bit") ||  value.contains("64 bit") ) {
@@ -811,137 +659,121 @@ public class ServerImage implements MachineImageSupport {
                     bestArchitectureGuess = Architecture.I32;
                 }
             }
-            else if( name.equals(nameSpaceString + "machineSpecification") ) {
-            	NodeList machineAttributes  = attribute.getChildNodes();
-            	for(int j=0;j<machineAttributes.getLength();j++ ){
-            		Node machine = machineAttributes.item(j);
-	            	if( machine.getNodeName().equals(nameSpaceString + "operatingSystem") ){
-		            	 NodeList osAttributes  = machine.getChildNodes();
-		            	 for(int k=0;k<osAttributes.getLength();k++ ){
-		            		 Node os = osAttributes.item(k);
-		            		 
-		            		 if(os.getNodeType() == Node.TEXT_NODE) continue;
-		            		 
-		            		 String osName = os.getNodeName();
-		                     
-		            		 String osValue = null ;
-		            		 
-		                     if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
-		                    	 osValue = os.getFirstChild().getNodeValue();
-		                     }
-		                     else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-			                     image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));			                       
-		                     }
-		                     else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
-		                    	 
-		                    	 image.getTags().put("cpuCount", os.getFirstChild().getNodeValue());
-		                     }  
-		                     else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-		                    	 image.getTags().put("memory", os.getFirstChild().getNodeValue());
-		                     }
-		                     
-		                     if( osValue != null ) {
-		                    	 bestArchitectureGuess = guess(osValue);
-		            		 }		            		           		     		 
-		            	 }
-	            	}
-            	}             
+            else if(name.equals(nameSpaceString + "machineSpecification")) {
+                NodeList machineAttributes  = attribute.getChildNodes();
+                for(int j=0;j<machineAttributes.getLength();j++ ){
+                    Node machine = machineAttributes.item(j);
+                    if( machine.getNodeName().equals(nameSpaceString + "operatingSystem") ){
+                        NodeList osAttributes  = machine.getChildNodes();
+                        for(int k=0;k<osAttributes.getLength();k++ ){
+                            Node os = osAttributes.item(k);
+
+                            if(os.getNodeType() == Node.TEXT_NODE) continue;
+
+                            String osName = os.getNodeName();
+
+                            String osValue = null ;
+
+                            if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
+                                osValue = os.getFirstChild().getNodeValue();
+                            }
+                            else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
+                                image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));
+                            }
+
+                            if( osValue != null ) {
+                                bestArchitectureGuess = guess(osValue);
+                            }
+                        }
+                    }
+                    else if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "cpuCount") && machine.getFirstChild().getNodeValue() != null ) {
+
+                        image.getTags().put("cpuCount", machine.getFirstChild().getNodeValue());
+                    }
+                    else if(machine.getNodeName().equalsIgnoreCase(nameSpaceString + "memoryMb") && machine.getFirstChild().getNodeValue() != null ) {
+                        image.getTags().put("memory", machine.getFirstChild().getNodeValue());
+                    }
+                }
             }
             else if( name.equals(nameSpaceString + "operatingSystem") ) {
-            	
-           	 	NodeList osAttributes  = attribute.getChildNodes();
-           	 	
-           	 	for(int j=0;j<osAttributes.getLength();j++ ){
-           	 		
-           	 		Node os = osAttributes.item(j);
-           	 		         
-           	 		if(os.getNodeType() == Node.TEXT_NODE) continue;
-        		 
-	        		 String osName = os.getNodeName();              
-	                 
-	        		 String osValue = null ;
-	        		 
-	                 if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
-	                	 osValue = os.getFirstChild().getNodeValue();
-	                 }
-	                 else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
-	                     image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));			                       
-	                 }
-	                 else if( osName.equalsIgnoreCase(nameSpaceString + "cpuCount") && os.getFirstChild().getNodeValue() != null ) {
-	                	 
-	                	 image.getTags().put("cpuCount", os.getFirstChild().getNodeValue());
-	                 }  
-	                 else if( osName.equalsIgnoreCase(nameSpaceString + "memory") && os.getFirstChild().getNodeValue() != null ) {
-	                   
-	                	 image.getTags().put("memory", os.getFirstChild().getNodeValue());
-	                 }
-	                 	                           	
-	           		 if( osValue != null  ) {
-	                      bestArchitectureGuess = guess(osValue);
-	           		 }
-	           		 
-	           		 if( osValue != null ) {	           			 
-	           			 image.setPlatform(Platform.guess(osValue));	                    
-	           		 }           		 
-           	 	}            	
-            
-           }
-           else if( name.equals(nameSpaceString + "location") && value != null) {
-        	   if(! provider.getDefaultRegionId().equals(value)){
-        		  return null;  
-        	   }
-        	   image.setProviderRegionId(value);
-        	   
-           }
-           else if( name.equals(nameSpaceString + "cpuCount") && value != null ) {
-        	
-        	   image.getTags().put("cpuCount", value);
- 
-           }  
-           else if( name.equals(nameSpaceString + "memory") && value != null ) {
-        	   image.getTags().put("memory", value);
-           } 
-           else if( name.equals("created") ) {
-               // 2010-06-29T20:49:28+1000
-               // TODO: implement when dasein cloud supports template creation timestamps
-           	
-           }
-           else if( name.equals(nameSpaceString + "osStorage") ) {
-              // TODO
-           }
-           else if( name.equals(nameSpaceString + "location") ) {
-            	image.setProviderRegionId(value);
-           }           
-           else if( name.equals(nameSpaceString + "deployedTime") ) {
+                NodeList osAttributes  = attribute.getChildNodes();
+
+                for(int j=0;j<osAttributes.getLength();j++ ){
+                    Node os = osAttributes.item(j);
+
+                    if(os.getNodeType() == Node.TEXT_NODE) continue;
+                    String osName = os.getNodeName();
+                    String osValue = null;
+
+                    if( osName.equals(nameSpaceString + "displayName") && os.getChildNodes().getLength() > 0 ) {
+                        osValue = os.getFirstChild().getNodeValue();
+                    }
+                    else if( osName.equals(nameSpaceString + "type") && os.getChildNodes().getLength() > 0) {
+                        image.setPlatform(Platform.guess(os.getFirstChild().getNodeValue()));
+                    }
+
+                    if( osValue != null  ) {
+                        bestArchitectureGuess = guess(osValue);
+                    }
+
+                    if( osValue != null ) {
+                        image.setPlatform(Platform.guess(osValue));
+                    }
+                }
+            }
+            else if( name.equals(nameSpaceString + "location") && value != null) {
+                if(!provider.getContext().getRegionId().equalsIgnoreCase(value)){
+                    return null;
+                }
+                image.setProviderRegionId(value);
+
+            }
+            else if(name.equals(nameSpaceString + "cpuCount") && value != null ) {
+                image.getTags().put("cpuCount", value);
+            }
+            else if( name.equals(nameSpaceString + "memoryMb") && value != null ) {
+                image.getTags().put("memory", value);
+            }
+            else if( name.equals("created") ) {
                 // 2010-06-29T20:49:28+1000
                 // TODO: implement when dasein cloud supports template creation timestamps
-           }else if( name.equals(nameSpaceString + "sourceServerId") ) {
-            	//TODO
-           }else if( name.equals(nameSpaceString + "softwareLabel") ) {
-            	image.setSoftware(value);
-           }
-            
+            }
+            else if( name.equals(nameSpaceString + "osStorage") ) {
+                // TODO
+            }
+            else if( name.equals(nameSpaceString + "location") ) {
+                image.setProviderRegionId(value);
+            }
+            else if( name.equals(nameSpaceString + "deployedTime") ) {
+                // 2010-06-29T20:49:28+1000
+                // TODO: implement when dasein cloud supports template creation timestamps
+            }else if( name.equals(nameSpaceString + "sourceServerId") ) {
+                //TODO
+            }else if( name.equals(nameSpaceString + "softwareLabel") ) {
+                image.setSoftware(value);
+            }
+
         }
         if(image.getDescription() == null || image.getDescription().equals("")){
             image.setDescription(image.getName());
         }
         if( image.getPlatform() == null && image.getName() != null ) {
-            image.setPlatform(Platform.guess(image.getName()));            
+            image.setPlatform(Platform.guess(image.getName()));
         }
         if( image.getPlatform().equals(Platform.UNKNOWN) && image.getDescription()!= null ) {
-            image.setPlatform(Platform.guess(image.getDescription()));            
+            image.setPlatform(Platform.guess(image.getDescription()));
         }
         if(image.getPlatform().equals(Platform.UNKNOWN)){
-        	if(image.getName().contains("Win2008") || image.getName().contains("Win2003")){
-        		image.setPlatform(Platform.WINDOWS);        		
-        	}        	
+            if(image.getName().contains("Win2008") || image.getName().contains("Win2003")){
+                image.setPlatform(Platform.WINDOWS);
+            }
         }
         if( image.getArchitecture() == null ) {
             image.setArchitecture(bestArchitectureGuess);
         }
         if( image.getSoftware() == null ) {
-        	guessSoftware(image);        	
+            guessSoftware(image);
         }
-        return image;       
+        return image;
     }
 }

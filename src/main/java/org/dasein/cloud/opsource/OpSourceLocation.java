@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2012 enStratus Networks Inc
+ * Copyright (C) 2009-2013 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@
 
 package org.dasein.cloud.opsource;
 
-import java.io.StringWriter;
 import java.util.*;
 
 import org.dasein.cloud.CloudException;
@@ -28,40 +27,44 @@ import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
 
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
+import javax.annotation.Nonnull;
 
 public class OpSourceLocation implements DataCenterServices {
 	
 	private OpSource provider = null;
+
 	OpSourceLocation(OpSource provider) {
 		this.provider = provider;
 	}
 
 	@Override
 	public DataCenter getDataCenter(String dataCenterId) throws InternalException,CloudException {
-		ArrayList<Region> regions = (ArrayList<Region>) listRegions();
-		if(regions == null) return null;
-			
-		for(Region region: regions){
-			ArrayList<DataCenter> dataCenters = (ArrayList<DataCenter>) this.listDataCenters(region.getProviderRegionId());
-			
-			if(dataCenters == null ) continue;			
-			for(DataCenter dc : dataCenters ){
-				if(dc.getProviderDataCenterId().equals(dataCenterId)){
-					return dc;							
-				}						
-			}				
-		}
-		return null;
-		
+        APITrace.begin(provider, "DC.getDataCenter");
+        try {
+            ArrayList<Region> regions = (ArrayList<Region>) listRegions();
+            if( regions == null ) {
+                return null;
+            }
+
+            for(Region region: regions){
+                ArrayList<DataCenter> dataCenters = (ArrayList<DataCenter>) this.listDataCenters(region.getProviderRegionId());
+
+                for(DataCenter dc : dataCenters ){
+                    if(dc.getProviderDataCenterId().equals(dataCenterId)){
+                        return dc;
+                    }
+                }
+            }
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 	@Override
@@ -76,116 +79,132 @@ public class OpSourceLocation implements DataCenterServices {
 
 	@Override
 	public Region getRegion(String regionId) throws InternalException,CloudException {
-		ArrayList<Region> regions = (ArrayList<Region>) listRegions();
-		if(regions != null){
-			for(Region region: regions){
-				if(regionId.equals(region.getProviderRegionId())){
-					return region;
-				}				
-			}
-		}
-		return null;
+        APITrace.begin(provider, "DC.getRegion");
+        try {
+            ArrayList<Region> regions = (ArrayList<Region>) listRegions();
+            if(regions != null){
+                for(Region region: regions){
+                    if(regionId.equals(region.getProviderRegionId())){
+                        return region;
+                    }
+                }
+            }
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
 	@Override
-	public Collection<DataCenter> listDataCenters(String regionId)throws InternalException, CloudException {
-		if(regionId == null) return null;
-		Region region = this.getRegion(regionId);
-		if(region == null){
-			throw new CloudException("No such region with regionId -> " + regionId);
-		}
-		
-		ArrayList<DataCenter> list = new ArrayList <DataCenter>();
-		DataCenter dc = new DataCenter();
-		dc.setActive(true);
-		dc.setAvailable(true);
-		dc.setName(region.getName() + " (DC)");
-		dc.setRegionId(regionId);
-		dc.setProviderDataCenterId(regionId);
-		list.add(dc);		
-		return list;
+	public @Nonnull Collection<DataCenter> listDataCenters(@Nonnull String regionId)throws InternalException, CloudException {
+        APITrace.begin(provider, "DC.listDataCenters");
+        try {
+            Region region = this.getRegion(regionId);
+            if(region == null){
+                throw new CloudException("No such region with regionId -> " + regionId);
+            }
+
+            DataCenter dc = new DataCenter();
+            dc.setActive(true);
+            dc.setAvailable(true);
+            dc.setName(region.getName() + " (DC)");
+            dc.setRegionId(regionId);
+            dc.setProviderDataCenterId(regionId);
+
+            return Collections.singletonList(dc);
+        }
+        finally {
+            APITrace.end();
+        }
 	}
 
-	@Override
-	public Collection<Region> listRegions() throws InternalException,CloudException {
-		ArrayList<Region> list = new ArrayList <Region>();
-	
-        HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.LOCATION_BASE_PATH, null);
-    	parameters.put(0, param);
+    @Override
+    public Collection<Region> listRegions() throws InternalException,CloudException {
+        APITrace.begin(provider, "DC.listRegions");
+        try{
+            ArrayList<Region> list = new ArrayList <Region>();
 
-        String cloudName = getCloudNameFromEndpoint();
-        if(cloudName == null){
-            //Error retrieving cloud from endpoint, use old method
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.LOCATION_BASE_PATH, null);
+            parameters.put(0, param);
+
+            String cloudName = getCloudNameFromEndpoint();
+            if(cloudName == null){
+                //Error retrieving cloud from endpoint, use old method
             /*OpSourceMethod method = new OpSourceMethod(provider,
     			provider.buildUrl(null,true, parameters),
     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
 		    Document doc = method.invoke();*/
-            Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
-            String sNS = "";
-            try{
-                sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
-            }
-            catch(IndexOutOfBoundsException ex){}
-            NodeList blocks = doc.getElementsByTagName(sNS + "datacenterWithLimits");
-            if(blocks != null){
-                for(int i=0; i< blocks.getLength();i++){
-                    Node item = blocks.item(i);
-                    Region region = toRegion(item, sNS);
-                    if(region != null){
-                        list.add(region);
-                        provider.setRegionEndpoint(region.getProviderRegionId(), provider.getContext().getEndpoint());
-                    }
-                }
-            }
-        }
-        else{
-            HashMap<String, ArrayList<String>> endpointMap = provider.getProivderEndpointMap();
-            ArrayList<String> currentCloudEndpoints = endpointMap.get(cloudName);
-            for(String endpoint : currentCloudEndpoints){
+                Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
+                String sNS = "";
                 try{
-                    String t = endpoint.toLowerCase();
-                    if(!(t.startsWith("http://") || t.startsWith("https://") || t.matches("^[a-z]+://.*"))){
-                        endpoint = "https://" + endpoint;
-                    }
-
-                    OpSourceMethod method = new OpSourceMethod(provider,
-                            provider.buildUrlWithEndpoint(endpoint, null,true, parameters),
-                            provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
-                    Document doc = method.invoke();
-
-                    //Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
-                    String sNS = "";
-                    try{
-                        sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
-                    }
-                    catch(IndexOutOfBoundsException ex){}
-                    NodeList blocks = doc.getElementsByTagName(sNS + "datacenterWithLimits");
-                    if(blocks != null){
-                        for(int i=0; i< blocks.getLength();i++){
-                            Node item = blocks.item(i);
-                            Region region = toRegion(item, sNS);
-                            if(region != null){
-                                list.add(region);
-                                provider.setRegionEndpoint(region.getProviderRegionId(), endpoint);
-                            }
+                    sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+                }
+                catch(IndexOutOfBoundsException ex){}
+                NodeList blocks = doc.getElementsByTagName(sNS + "datacenterWithLimits");
+                if(blocks != null){
+                    for(int i=0; i< blocks.getLength();i++){
+                        Node item = blocks.item(i);
+                        Region region = toRegion(item, sNS);
+                        if(region != null){
+                            list.add(region);
+                            provider.setRegionEndpoint(region.getProviderRegionId(), provider.getContext().getEndpoint());
                         }
                     }
                 }
-                catch(Exception ex){
-                    System.out.println("OpSourceLocation error");
-                    ex.printStackTrace();
+            }
+            else{
+                HashMap<String, ArrayList<String>> endpointMap = provider.getProivderEndpointMap();
+                ArrayList<String> currentCloudEndpoints = endpointMap.get(cloudName);
+                for(String endpoint : currentCloudEndpoints){
+                    try{
+                        String t = endpoint.toLowerCase();
+                        if(!(t.startsWith("http://") || t.startsWith("https://") || t.matches("^[a-z]+://.*"))){
+                            endpoint = "https://" + endpoint;
+                        }
+
+                        OpSourceMethod method = new OpSourceMethod(provider,
+                                provider.buildUrlWithEndpoint(endpoint, null,true, parameters),
+                                provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET",null));
+                        Document doc = method.invoke();
+
+                        //Document doc = CallCache.getInstance().getAPICall(OpSource.LOCATION_BASE_PATH, provider, parameters, "");
+                        String sNS = "";
+                        try{
+                            sNS = doc.getDocumentElement().getTagName().substring(0, doc.getDocumentElement().getTagName().indexOf(":") + 1);
+                        }
+                        catch(IndexOutOfBoundsException ex){}
+                        NodeList blocks = doc.getElementsByTagName(sNS + "datacenterWithLimits");
+                        if(blocks != null){
+                            for(int i=0; i< blocks.getLength();i++){
+                                Node item = blocks.item(i);
+                                Region region = toRegion(item, sNS);
+                                if(region != null){
+                                    list.add(region);
+                                    provider.setRegionEndpoint(region.getProviderRegionId(), endpoint);
+                                }
+                            }
+                        }
+                    }
+                    catch(Exception ex){
+                        //System.out.println("OpSourceLocation error");
+                        //ex.printStackTrace();
                     /*
                     If this fails it is likely a 401 authentication error against the endpoint.
                     Rather than getting a nice XML API error response however, OpSource returns the default apache htaccess 401 error
                     so it fails to parse and throws an exception. We're not really interested in this exception as some accounts
                     legitimately don't have access to all the endpoints.
                      */
+                    }
                 }
             }
+            return list;
         }
-        return list;
-	}
+        finally {
+            APITrace.end();
+        }
+    }
 
     public String getCloudNameFromEndpoint(){
         String endpoint = provider.getEndpoint(null);
@@ -205,33 +224,33 @@ public class OpSourceLocation implements DataCenterServices {
         return null;
     }
 
-	public Region toRegion( Node region, String nameSpace) throws CloudException{
-		if(region == null){
-			return null;
-		}
-		
-		NodeList data;
-    	
-		data = region.getChildNodes();
+    public Region toRegion( Node region, String nameSpace) throws CloudException{
+        if(region == null){
+            return null;
+        }
+
+        NodeList data;
+
+        data = region.getChildNodes();
 
         String country = "US";
-		Region r = new Region();
-		for( int i=0; i<data.getLength(); i++ ) {
-			Node item = data.item(i);
-			if(item.getNodeType() == Node.TEXT_NODE) continue;
-			
-			if( item.getNodeName().equals(nameSpace + "location") ) {
-				r.setProviderRegionId(item.getFirstChild().getNodeValue());
-			}
-			else if( item.getNodeName().equals(nameSpace + "displayName") ) {
-				r.setName(item.getFirstChild().getNodeValue());
-			}
+        Region r = new Region();
+        for( int i=0; i<data.getLength(); i++ ) {
+            Node item = data.item(i);
+            if(item.getNodeType() == Node.TEXT_NODE) continue;
+
+            if( item.getNodeName().equals(nameSpace + "location") ) {
+                r.setProviderRegionId(item.getFirstChild().getNodeValue());
+            }
+            else if( item.getNodeName().equals(nameSpace + "displayName") ) {
+                r.setName(item.getFirstChild().getNodeValue());
+            }
             else if(item.getNodeName().equals(nameSpace + "country")){
                 country = item.getFirstChild().getNodeValue();
             }
-		}	
-		r.setActive(true);
-		r.setAvailable(true);
+        }
+        r.setActive(true);
+        r.setAvailable(true);
 
         if(country.equals("US")){
             r.setJurisdiction("US");
@@ -246,6 +265,6 @@ public class OpSourceLocation implements DataCenterServices {
             //The only one where the country is different
             r.setJurisdiction("EU");
         }
-		return r;
-	}
+        return r;
+    }
 }

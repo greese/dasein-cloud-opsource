@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2012 enStratus Networks Inc
+ * Copyright (C) 2009-2013 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,6 @@ package org.dasein.cloud.opsource.compute;
 
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -37,71 +36,77 @@ import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.opsource.OpSource;
 import org.dasein.cloud.opsource.OpSourceMethod;
 import org.dasein.cloud.opsource.Param;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Storage;
 
 
-public class Volumes implements VolumeSupport {
+public class Volumes extends AbstractVolumeSupport {
     //static private final Logger logger = Logger.getLogger(Volumes.class);
   
     private OpSource provider;
     
     Volumes(OpSource provider) {
+        super(provider);
         this.provider = provider;
     }
     
     @Override
     public void attach(@Nonnull String volumeId, @Nonnull String serverId, @Nonnull String deviceId) throws InternalException, CloudException {
-    	//No need for volumeId and deviceId
-    	attach(serverId, 10);    	
+        APITrace.begin(getProvider(), "Volume.attach");
+        try {
+            //No need for volumeId and deviceId
+            attach(serverId, 10);
+        }
+        finally {
+            APITrace.end();
+        }
     }
     
     public void attach(String serverId, int sizeInGb) throws InternalException, CloudException {
-    	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-     	parameters.put(0, param);
-     	param = new Param(serverId, null);
-     	parameters.put(1, param);   
-    	param = new Param("amount", String.valueOf(sizeInGb));
-     	parameters.put(2, param); 
-     	
-     	OpSourceMethod method = new OpSourceMethod(provider, 
-     			provider.buildUrl(null,true, parameters),
-     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", null));
-       	method.requestResult("Attaching disk",method.invoke());
+        APITrace.begin(getProvider(), "Volume.attach");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+            parameters.put(0, param);
+            param = new Param(serverId, null);
+            parameters.put(1, param);
+            param = new Param("amount", String.valueOf(sizeInGb));
+            parameters.put(2, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "POST", null));
+            method.requestResult("Attaching disk",method.invoke());
+        }
+        finally {
+            APITrace.end();
+        }
     }
-
-
-    @Override
-    @Deprecated
-    public @Nonnull String create(@Nonnull String snapshotId, int size, @Nonnull String zoneId) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Creating volumes is not supported");
-    }
-
     @Override
     public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
         throw new OperationNotSupportedException("Creating volumes is not supported");
     }
 
     @Override
-    public void detach(@Nonnull String volumeId) throws InternalException, CloudException {
-    	HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
-        Param param = new Param(OpSource.SERVER_BASE_PATH, null);
-     	parameters.put(0, param);
-     	//param = new Param(serverId, null);
-     	//parameters.put(1, param);   
-    	param = new Param("amount", String.valueOf(10));
-     	parameters.put(2, param); 
-     	
-     	OpSourceMethod method = new OpSourceMethod(provider, 
-     			provider.buildUrl(null,true, parameters),
-     			provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
-       	method.requestResult("Attaching disk",method.invoke());
-    }
-
-    @Override
     public void detach(@Nonnull String s, boolean b) throws InternalException, CloudException {
-        //TODO: Implement for 2013.01
+        APITrace.begin(getProvider(), "Volume.detach");
+        try {
+            HashMap<Integer, Param>  parameters = new HashMap<Integer, Param>();
+            Param param = new Param(OpSource.SERVER_BASE_PATH, null);
+            parameters.put(0, param);
+            //param = new Param(serverId, null);
+            //parameters.put(1, param);
+            param = new Param("amount", String.valueOf(10));
+            parameters.put(2, param);
+
+            OpSourceMethod method = new OpSourceMethod(provider,
+                    provider.buildUrl(null,true, parameters),
+                    provider.getBasicRequestParameters(OpSource.Content_Type_Value_Single_Para, "GET", null));
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -207,12 +212,7 @@ public class Volumes implements VolumeSupport {
     public @Nonnull Iterable<Volume> listVolumes() throws InternalException, CloudException {
         return Collections.emptyList();
     }
-     
-    private Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
-        return Collections.emptyList();
-    }
 
- 
     @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
