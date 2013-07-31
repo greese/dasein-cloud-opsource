@@ -230,9 +230,9 @@
                             <value>${test.shareAccount}</value>
                         </property>
                     </systemProperties>
-                    <includes>
-                        <include>**/OpSourceTestSuite.java</include>
-                    </includes>
+                    <excludes>
+                        <exclude>**/OpSourceTestSuite.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>
