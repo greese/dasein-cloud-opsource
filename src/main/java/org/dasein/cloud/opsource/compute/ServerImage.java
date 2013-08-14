@@ -611,6 +611,7 @@ public class ServerImage extends AbstractImageSupport {
             image.setProviderOwnerId(provider.getCloudName());
         }
 
+        image.setImageClass(ImageClass.MACHINE);
         image.setType(MachineImageType.STORAGE);
         if(isPending){
             image.setCurrentState(MachineImageState.PENDING);
