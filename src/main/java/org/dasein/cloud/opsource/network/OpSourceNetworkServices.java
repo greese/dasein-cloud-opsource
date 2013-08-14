@@ -41,8 +41,9 @@ public class OpSourceNetworkServices extends AbstractNetworkServices {
     }
     
     @Override
-    public @Nonnull LoadBalancers getLoadBalancerSupport() {
-        return new LoadBalancers(cloud);
+    public @Nullable LoadBalancers getLoadBalancerSupport() {
+        // NOTE: load balancer support is currently disabled for this driver
+        return null;
     }
     
     @Override

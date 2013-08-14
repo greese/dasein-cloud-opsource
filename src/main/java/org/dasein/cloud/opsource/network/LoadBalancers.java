@@ -1112,7 +1112,8 @@ serverFarm/{server-farm-id}
 
 	@Override
 	public boolean isSubscribed() throws CloudException, InternalException {
-		return true;
+        // NOTE: load balancer support is currently disabled for this driver
+		return false;
 	}
 
 	@Override
