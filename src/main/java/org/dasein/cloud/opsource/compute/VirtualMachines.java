@@ -496,6 +496,10 @@ public class VirtualMachines extends AbstractVMSupport<OpSource> {
             String description = withLaunchOptions.getDescription();
             final String withVlanId = withLaunchOptions.getVlanId();
 
+            if(withVlanId == null || withVlanId.equals("")){
+                throw new CloudException("A network must be specified when launching a server.");
+            }
+
             /** First step get the target image */
             if( logger.isInfoEnabled() ) {
                 logger.info("Fetching deployment information from the target image: " + imageId);
