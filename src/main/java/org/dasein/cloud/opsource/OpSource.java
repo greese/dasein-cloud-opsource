@@ -409,7 +409,7 @@ public class OpSource extends AbstractCloud {
 
 
     public String getOrgId(String endpoint) throws InternalException,CloudException{
-        Cache<String> daseinCache = Cache.getInstance(this, "orgId", String.class, CacheLevel.CLOUD_ACCOUNT);
+        Cache<String> daseinCache = Cache.getInstance(this, "orgId", String.class, CacheLevel.REGION_ACCOUNT);
         Collection<String> orgIds = (Collection<String>)daseinCache.get(getContext());
 
         String orgId = "";
